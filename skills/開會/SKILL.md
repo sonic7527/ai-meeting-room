@@ -52,3 +52,5 @@ description: 開一場「使用者＋Claude／GPT／Gemini」AI 會議(電腦裡
 until curl -s "http://127.0.0.1:7720/api/rooms/<urlencode 過的 id>/messages?after=99999" | grep -q '"export"'; do sleep 15; done; echo 散會
 ```
 收到通知後讀 `<專案>/docs/meetings/<日期>_<標題>/transcript.md`,**先把結果攤給用戶**(各方重點、共識、分歧、要用戶決定的事),對其他 AI 的意見逐條表達你的看法;結論由用戶下。
+
+散會匯出時已經只留採用的附件(按過 ✓ 的,加上最後一則沒被否決的)。用戶拍板、工作做完(上線、合併或部署)後再清一次:那個資料夾裡用戶沒採用的檔案、過程中自己做的暫用預覽頁和截圖全部刪掉;提交時只放逐字稿、發言紀錄和採用的檔案。

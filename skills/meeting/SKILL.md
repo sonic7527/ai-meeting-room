@@ -52,3 +52,5 @@ Run with `run_in_background: true`:
 until curl -s "http://127.0.0.1:7720/api/rooms/<url-encoded id>/messages?after=99999" | grep -q '"export"'; do sleep 15; done; echo closed
 ```
 When notified, read `<project>/docs/meetings/<date>_<title>/transcript.md` and **report the results to the user first** (each AI's main points, agreements, disagreements, what the user must decide). Give your own view on other AIs' points. The user makes the decisions.
+
+The export already keeps only adopted attachments (✓, plus the last one not rejected). After the user has decided and the work is done (shipped, merged or deployed), clean up once more: delete anything in that folder the user did not adopt, and any temporary preview pages or screenshots you made along the way. Commit only the transcript, the log and the adopted files.

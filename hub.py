@@ -13,7 +13,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs, unquote
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 HERE = os.path.dirname(os.path.abspath(__file__))
 IS_WIN = os.name == "nt"
 
@@ -100,7 +100,7 @@ T = {
         "agy_allow": "agy has not allowed the meeting tools yet. Click \"Allow meeting tools\" in the invite panel.",
         "transcript": {"time": "Started", "project": "Project", "type": "Type", "models": "Models",
                        "worktree": "Lead's copy", "merge": "merge is the host's decision", "topic": "Topic",
-                       "log": "Transcript"},
+                       "log": "Transcript", "dropped": "not kept: not adopted"},
         "img_note": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no "
                     "external URLs) in the `html` field of send_message; the room shows it inline and interactive. You "
                     "can also make images with your built-in image tool and pass the file path as attach_path. Never "
@@ -144,7 +144,8 @@ T = {
         "no_gemini": "找不到 Antigravity 命令列程式(agy):請安裝後執行一次 `agy` 用 Google 帳號登入(或設定 AGY_BIN)",
         "agy_allow": "agy 還沒允許會議室工具:請在邀請區按「允許會議室工具」。",
         "transcript": {"time": "時間", "project": "專案", "type": "類型", "models": "模型",
-                       "worktree": "主審副本", "merge": "合併與否由主持人決定", "topic": "議題", "log": "逐字稿"},
+                       "worktree": "主審副本", "merge": "合併與否由主持人決定", "topic": "議題", "log": "逐字稿",
+                       "dropped": "未保留:沒有採用"},
         "img_note": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
                     "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能出圖,把檔案路徑放進 attach_path。"
                     "不要叫{host}開網址,也不要自己架伺服器。",
@@ -819,6 +820,29 @@ def stop_seat(room, seat):
         room.cond.notify_all()
 
 
+def kept_attachments(room):
+    with_files = [m["seq"] for m in room.msgs if m["who"] != "user" and m.get("imgs")]
+    adopted, vetoed = set(), set()
+    for m in room.msgs:
+        if m["who"] != "user":
+            continue
+        hit = re.match(r"↩ #(\d+)", m["text"] or "")
+        if not hit:
+            continue
+        seq, rest = int(hit.group(1)), m["text"][hit.end():]
+        if "✕" in rest:
+            vetoed.add(seq)
+            adopted.discard(seq)
+        elif "✓" in rest:
+            adopted.add(seq)
+            vetoed.discard(seq)
+    keep = {q for q in with_files if q in adopted}
+    rest = [q for q in with_files if q not in vetoed]
+    if rest:
+        keep.add(rest[-1])
+    return keep
+
+
 def export_room(room):
     proj = room.meta.get("project") or DEFAULT_PROJECT
     if not os.path.isdir(proj):
@@ -839,15 +863,21 @@ def export_room(room):
     if room.meta.get("branch"):
         lines.append(f"- {L['worktree']}: {room.meta.get('worktree')} (`{room.meta['branch']}`, {L['merge']})")
     lines += ["", f"## {L['topic']}", "", room.meta.get("topic", ""), "", f"## {L['log']}", ""]
+    keep = kept_attachments(room)
     for m in room.msgs:
         if m["who"] == "system":
             lines += [f"> {m['at'][11:16]} {m['text']}", ""]
             continue
         lines += [f"### {name.get(m['who'], m['who'])} ({m['at'][11:16]})", "", m["text"], ""]
         for f in m.get("imgs") or []:
-            src = os.path.join(room.dir, f)
+            src, dst = os.path.join(room.dir, f), os.path.join(out, f)
+            if m["seq"] not in keep:
+                if os.path.isfile(dst):
+                    os.remove(dst)
+                lines += [f"`{f}` ({L['dropped']})", ""]
+                continue
             if os.path.isfile(src):
-                shutil.copyfile(src, os.path.join(out, f))
+                shutil.copyfile(src, dst)
                 lines += [f"[{f}]({f})" if f.lower().endswith(tuple(PAGE_EXT)) else f"![]({f})", ""]
     with open(os.path.join(out, "transcript.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))

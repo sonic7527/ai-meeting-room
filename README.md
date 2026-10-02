@@ -15,6 +15,7 @@
 - **Several meetings at once**, one browser tab each; delete old meetings from the list.
 - **Self-healing.** An AI that stops unexpectedly is brought back automatically; after a restart, open meetings get their AIs back.
 - **Transcripts saved into your project** (`docs/meetings/<date>_<title>/transcript.md`) when you close the meeting.
+- **Only adopted attachments are kept**: mock-ups and images you marked ✓ plus the last one nobody rejected are copied out; everything else (including ✕ rejected versions) is left out and marked in the transcript, so the folder stays small.
 - English and Traditional Chinese UI and meeting language.
 - One Python file, standard library only. Runs on `127.0.0.1` only.
 
