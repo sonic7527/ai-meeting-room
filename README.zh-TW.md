@@ -5,12 +5,15 @@
 [English](README.md)
 
 - **用你已經有的訂閱**:Claude 走 Claude Code(你的 Claude 帳號)、GPT 走 OpenAI Codex(你的 ChatGPT 帳號)、Gemini 走 Antigravity 命令列程式(你的 Google 帳號)。不需要 API 金鑰。
-- **自動偵測**電腦裡裝了、登入了哪幾位,想請一位、兩位或三位都可以。
-- **你是主持人**:AI 先回應你的插話;你每則發言下方標示誰已回應;AI 不會自己結束會議;你沒發言時 AI 連講 8 則就自動暫停等你。
+- **自動偵測**電腦裡裝了、登入了哪幾位。你按「邀請」才入席,開會中隨時可以再邀請或請某位離席。
+- **你是主持人**:AI 先回應你的插話;你每則發言下方標示誰已回應;AI 不會自己結束會議;你沒發言時 AI 連講 8 則就自動暫停等你;你否決了,它會立刻改版。
+- **像聊天軟體一樣好用**:在任何一則訊息上按右鍵可以回覆它、一鍵 ✕ 否決或 ✓ 採用;Enter 送出、Shift+Enter 換行。
+- **樣板直接貼在對話裡**:AI 可以把單一網頁檔跟著發言一起貼上,直接嵌在對話裡,動畫、按鈕、拖曳都能操作,不用另外開網址。
 - **同一個專案、同一套背景**:選一個資料夾,每位 AI 發言前都先讀同樣的專案說明檔(CLAUDE.md、AGENTS.md、GEMINI.md、README)。
 - **主審與輔助**:可以指定一位 AI 當主審,所有改程式和 git 提交都由它做,而且**只在專案外的 git 獨立副本裡做**;其他 AI 負責檢查、做主審指派的唯讀工作。
-- **每位 AI 可以各自選模型和思考深度**,會議中也能換。
-- **可以同時開好幾場會議**,每場一個瀏覽器分頁。
+- **每位 AI 可以各自選模型和思考深度**,會議中也能換,而且會記住你上次的選擇。
+- **可以同時開好幾場會議**,每場一個瀏覽器分頁;舊會議可以從清單刪除。
+- **自動修復**:AI 意外離席會被自動請回;會議室重啟後,進行中的會議會自動把 AI 請回來。
 - **散會時逐字稿自動存進你的專案**(`docs/meetings/<日期>_<標題>/transcript.md`)。
 - 介面和會議語言支援英文、繁體中文。
 - 只有一個 Python 檔,只用標準函式庫,只在本機 `127.0.0.1` 執行。
@@ -44,15 +47,36 @@ powershell -ExecutionPolicy Bypass -File ~/ai-meeting-room/start_bg.ps1
 bash ~/ai-meeting-room/start_bg.sh
 ```
 
-打開 <http://127.0.0.1:7720/>,按「開新會議」,選專案、勾選要邀請的 AI、寫議題,按「開會」。
+打開 <http://127.0.0.1:7720/>,按「開新會議」,選專案、寫議題,按「開會」,再按「邀請」請 AI 入席。
+
+### 更新
+
+```bash
+git -C ~/ai-meeting-room pull
+# Windows
+powershell -ExecutionPolicy Bypass -File ~/ai-meeting-room/start_bg.ps1 -Restart
+# macOS / Linux
+bash ~/ai-meeting-room/start_bg.sh --restart
+```
+
+進行中的會議不受影響:AI 會自動重新入席,讀完前面的對話接著討論。
 
 ### Gemini 第一次要做的設定
 
-Antigravity 命令列程式在背景執行時沒辦法跳出詢問,要先在它的設定裡允許會議室工具。在「開新會議」視窗的 Gemini 欄位按「允許會議室工具」,它只會在 `~/.gemini/antigravity-cli/settings.json` 加一條 `mcp(meeting/*)` 規則,其他都不動。
+Antigravity 命令列程式在背景執行時沒辦法跳出詢問,要先在它的設定裡允許會議室工具。在「邀請」(或「開新會議」)視窗的 Gemini 欄位按「允許會議室工具」,它只會在 `~/.gemini/antigravity-cli/settings.json` 加一條 `mcp(meeting/*)` 規則,其他都不動。
 
 ### 選用:給 Claude Code 的「開會」指令
 
-把 `skills/開會`(中文)或 `skills/meeting`(英文)複製到 `~/.claude/skills/`。之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開會、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
+把 `skills/開會`(中文)或 `skills/meeting`(英文)用捷徑連結放進 `~/.claude/skills/`,之後 `git pull` 指令也會跟著更新:
+
+```bash
+# Windows(PowerShell,不需要系統管理員)
+New-Item -ItemType Junction -Path "$HOME\.claude\skills\開會" -Target "$HOME\ai-meeting-room\skills\開會"
+# macOS / Linux
+ln -s ~/ai-meeting-room/skills/開會 ~/.claude/skills/開會
+```
+
+之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開一場空的會議、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
 
 ## 運作方式
 
@@ -73,7 +97,7 @@ Antigravity 命令列程式在背景執行時沒辦法跳出詢問,要先在它�
 | 主審 | 改檔和提交**只在 git 獨立副本裡做**(新分支 `meeting/<時間>`,放在專案外,只有受 git 管理的檔案,沒有 `.env` 等未納管的機密檔)。Claude 主審能用的指令有白名單(git 不含 push、語法檢查);Codex 在它自己的沙盒裡執行;`agy` 在背景模式會拒絕終端機指令。推送、部署、刪檔、動到正式環境一律要先在會議室問你 |
 | 輔助 | 只能讀,加上做主審指派的唯讀工作 |
 
-主審的分支要不要合併回來,由你決定。伺服器只聽本機 `127.0.0.1`,也會擋掉其他網頁發來的寫入。AI 的執行紀錄(含它們讀過的檔案內容)只留在資料夾,不會寫進你的專案。
+Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人平常允許過的指令不會讓席位的權限變大。樣板是放在發言裡的網頁內容,唯讀的席位不必寫檔;嵌進對話的網頁在隔離框裡執行,動不了會議室。主審的分支要不要合併回來,由你決定。伺服器只聽本機 `127.0.0.1`,也會擋掉其他網頁發來的寫入。AI 的執行紀錄(含它們讀過的檔案內容)只留在資料夾,不會寫進你的專案。
 
 **不過 AI 還是可能出錯。** 開會時請看著,合併主審的改動前先看過差異,也不要把含有機密、你不願讓 AI 廠商看到的資料夾交給它們。
 

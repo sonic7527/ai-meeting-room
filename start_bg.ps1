@@ -1,8 +1,18 @@
+param([switch]$Restart)
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $port = if ($env:MEETING_PORT) { $env:MEETING_PORT } else { "7720" }
 $url = "http://127.0.0.1:$port/"
-try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "${url}api/rooms" | Out-Null; Write-Output "already running: $url"; exit 0 } catch {}
+$running = $false
+try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "${url}api/rooms" | Out-Null; $running = $true } catch {}
+if ($running -and -not $Restart) { Write-Output "already running: $url"; exit 0 }
+if ($running) {
+    try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 -Method Post -ContentType "application/json" -Body "{}" "${url}api/shutdown" | Out-Null } catch {}
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Milliseconds 500
+        try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 "${url}api/rooms" | Out-Null } catch { break }
+    }
+}
 
 $py = $null
 foreach ($c in @("$env:LOCALAPPDATA\Python\bin\python.exe") + @("py", "python3", "python" | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source })) {

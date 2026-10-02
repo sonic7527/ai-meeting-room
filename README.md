@@ -5,12 +5,15 @@
 [繁體中文說明](README.zh-TW.md)
 
 - **Uses the subscriptions you already have.** Claude runs through Claude Code (your Claude account), GPT through OpenAI Codex (your ChatGPT account), Gemini through Antigravity CLI (your Google account). No API keys.
-- **Auto-detects** which of the three are installed and signed in; invite any one, two or all three.
-- **You are the host.** Interjections are answered first, every host message shows who has replied, the AIs never end the meeting on their own, and they pause after 8 messages in a row without you.
+- **Auto-detects** which of the three are installed and signed in. Nobody joins until you click **Invite**; invite or dismiss any AI at any time.
+- **You are the host.** Interjections are answered first, every host message shows who has replied, the AIs never end the meeting on their own, and they pause after 8 messages in a row without you. Rejections are acted on immediately.
+- **Chat-app feel.** Right-click any message to reply to it, reject (✕) or adopt (✓) it in one click; Enter sends, Shift+Enter adds a line.
+- **Mock-ups right in the conversation.** An AI can post a self-contained HTML page with its message; it is shown inline and stays interactive (animations, buttons, dragging) — no URLs to open.
 - **Same project, same context.** Pick a folder; every AI reads the same files (CLAUDE.md, AGENTS.md, GEMINI.md, README) before speaking.
 - **Lead and assistants.** Optionally make one AI the lead: it does all code changes and git commits **in an isolated git worktree outside your project**; the others review and do read-only tasks it assigns.
-- **Per-AI model and reasoning effort**, changeable mid-meeting.
-- **Several meetings at once**, one browser tab each.
+- **Per-AI model and reasoning effort**, changeable mid-meeting and remembered for next time.
+- **Several meetings at once**, one browser tab each; delete old meetings from the list.
+- **Self-healing.** An AI that stops unexpectedly is brought back automatically; after a restart, open meetings get their AIs back.
 - **Transcripts saved into your project** (`docs/meetings/<date>_<title>/transcript.md`) when you close the meeting.
 - English and Traditional Chinese UI and meeting language.
 - One Python file, standard library only. Runs on `127.0.0.1` only.
@@ -44,15 +47,36 @@ powershell -ExecutionPolicy Bypass -File ~/ai-meeting-room/start_bg.ps1
 bash ~/ai-meeting-room/start_bg.sh
 ```
 
-Open <http://127.0.0.1:7720/>, click **New meeting**, pick the project, tick the AIs to invite, write the topic, **Start meeting**.
+Open <http://127.0.0.1:7720/>, click **New meeting**, pick the project, write the topic, **Start meeting**, then **Invite** the AIs you want.
+
+### Updating
+
+```bash
+git -C ~/ai-meeting-room pull
+# Windows
+powershell -ExecutionPolicy Bypass -File ~/ai-meeting-room/start_bg.ps1 -Restart
+# macOS / Linux
+bash ~/ai-meeting-room/start_bg.sh --restart
+```
+
+Open meetings keep going: their AIs rejoin automatically and re-read the conversation.
 
 ### One-time setup for Gemini
 
-Antigravity CLI runs in the background and cannot ask you for permission, so the meeting tools must be allowed in its settings. In the **New meeting** dialog, click **Allow meeting tools** under Gemini. It adds exactly one rule, `mcp(meeting/*)`, to `~/.gemini/antigravity-cli/settings.json` — nothing else.
+Antigravity CLI runs in the background and cannot ask you for permission, so the meeting tools must be allowed in its settings. In the **Invite** (or **New meeting**) dialog, click **Allow meeting tools** under Gemini. It adds exactly one rule, `mcp(meeting/*)`, to `~/.gemini/antigravity-cli/settings.json` — nothing else.
 
 ### Optional: the `meeting` command for Claude Code
 
-Copy `skills/meeting` (English) or `skills/開會` (Chinese) into `~/.claude/skills/`. Then just tell Claude "start a meeting about …": it starts the room, opens the meeting on the current project in a new Chrome tab, waits until you close it and reports the result. If you cloned somewhere other than `~/ai-meeting-room`, set `AI_MEETING_ROOM_DIR`.
+Link `skills/meeting` (English) or `skills/開會` (Chinese) into `~/.claude/skills/` so that `git pull` also updates the command:
+
+```bash
+# Windows (PowerShell, no admin needed)
+New-Item -ItemType Junction -Path "$HOME\.claude\skills\meeting" -Target "$HOME\ai-meeting-room\skills\meeting"
+# macOS / Linux
+ln -s ~/ai-meeting-room/skills/meeting ~/.claude/skills/meeting
+```
+
+Then just tell Claude "start a meeting about …": it starts the room, opens an empty meeting on the current project in a new Chrome tab, waits until you close it and reports the result. If you cloned somewhere other than `~/ai-meeting-room`, set `AI_MEETING_ROOM_DIR`.
 
 ## How it works
 
@@ -73,7 +97,7 @@ When a meeting starts, the hub launches each invited AI as a background process 
 | Lead | Edits files and commits **only inside an isolated git worktree** (new branch `meeting/<time>`, stored outside your project, containing tracked files only — no `.env` or untracked secrets). Claude's lead commands are allow-listed (git without push, syntax checks). Codex runs in its `workspace-write` sandbox. `agy` refuses shell commands in background mode. Push, deploy, deleting files or touching production must be asked in the meeting first. |
 | Assistant | Read-only, plus read-only tasks the lead assigns. |
 
-Merging the lead's branch back is your decision. The server binds to `127.0.0.1` only and rejects writes from other web pages. Seat logs (which contain whatever the AIs read) stay in the data folder and are never written into your project.
+Claude seats load only the project's shared settings (`--setting-sources project`), so your personal allow-lists never widen a seat's permissions. Mock-ups are posted as HTML inside the message, so read-only seats never need to write files; posted pages run in a sandbox and cannot act on the meeting room. Merging the lead's branch back is your decision. The server binds to `127.0.0.1` only and rejects writes from other web pages. Seat logs (which contain whatever the AIs read) stay in the data folder and are never written into your project.
 
 **Still, AI agents can make mistakes.** Watch the meeting, review the lead's diff before merging, and do not point it at folders with secrets you would not show the AI providers.
 

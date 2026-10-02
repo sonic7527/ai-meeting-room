@@ -22,7 +22,8 @@ meeting.json (UTF-8):
    "seats": ["Claude", "GPT", "Gemini"],
    "seat_cfg": {"GPT": {"model": "", "effort": ""}}}
 
-"seats" and "seat_cfg" are optional: without them every installed AI is invited with its default model.
+"seats" and "seat_cfg" are optional: without "seats" the meeting starts empty and you click Invite in the page;
+without "seat_cfg" each AI uses the model you picked last time.
 Pass non-ASCII text through the file, not the command line (Windows shells may re-encode it).
 """
 BASE = f"http://127.0.0.1:{os.environ.get('MEETING_PORT', '7720')}"

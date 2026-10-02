@@ -35,6 +35,13 @@ aside h1{margin:0;font-size:23px;letter-spacing:.03em}
 .item{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);font-weight:500;padding:10px 12px;border-radius:8px}
 .item small{display:block;color:var(--ink-3);font-size:14px;font-weight:400}
 .item.on{background:var(--me-bg)} .item.closed{opacity:.6}
+.itemrow{display:flex;align-items:center;gap:4px}
+.itemrow .item{flex:1;min-width:0}
+.del{flex:0 0 auto;background:transparent;color:var(--ink-3);border:1px solid transparent;padding:4px 8px;font-size:13px;font-weight:600}
+.itemrow:hover .del,.del:focus-visible,.del[data-arm="1"]{border-color:var(--hair);color:var(--danger)}
+.leave{background:transparent;color:var(--ink-3);padding:0 4px;font-size:16px;line-height:1;border-radius:6px}
+.leave:hover{color:var(--danger)}
+.noseat{font-size:15px;color:var(--warn);font-weight:600}
 
 main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
 header{padding:14px 24px;border-bottom:1px solid var(--hair);display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
@@ -65,6 +72,30 @@ header h2{margin:0;font-size:24px;flex:1 1 260px;min-width:0}
 .m-system .body{background:transparent;color:var(--sys);font-size:15px;padding:2px 8px;text-align:center}
 .body.sum{background:var(--sum-bg)!important;border:1px solid color-mix(in srgb,var(--sum) 40%,transparent)}
 .body img{display:block;max-width:100%;max-height:520px;margin-top:10px;border-radius:10px;border:1px solid var(--hair)}
+.msg:has(.page){max-width:min(1200px,100%);width:100%}
+.page{margin-top:10px;border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel);white-space:normal}
+.pagebar{display:flex;align-items:center;gap:10px;padding:6px 10px;font-size:14px;color:var(--ink-3);border-bottom:1px solid var(--hair)}
+.pagebar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pagebar button{padding:3px 10px;font-size:14px}
+.pagebar a{color:var(--me);font-weight:600}
+.page iframe{display:block;width:100%;height:560px;border:0;background:var(--bg)}
+.page.full{position:fixed;inset:12px;z-index:50;margin:0;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+.page.full iframe{flex:1;height:auto}
+.quote{border-left:3px solid var(--ink-3);padding:2px 10px;margin-bottom:8px;font-size:14px;color:var(--ink-2);cursor:pointer;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:color-mix(in srgb,var(--ink) 6%,transparent);border-radius:0 6px 6px 0}
+.msg.flash .body{outline:3px solid var(--me);outline-offset:2px}
+.msgacts{display:inline-flex;gap:4px;margin-left:6px;opacity:0;transition:opacity .15s}
+.msg:hover .msgacts,.msgacts:focus-within{opacity:1}
+.msgacts button{padding:0 8px;font-size:14px;line-height:1.6;background:var(--panel);color:var(--ink-2);border:1px solid var(--hair);border-radius:6px}
+.msgacts button:hover{color:var(--ink)}
+#replybar{display:flex;align-items:center;gap:8px;padding:6px 24px;background:var(--panel);border-top:1px solid var(--hair);font-size:15px;color:var(--ink-2)}
+#replybar[hidden]{display:none}
+#replytxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:3px solid var(--me);padding-left:8px}
+#replyx{background:transparent;color:var(--ink-3);padding:0 8px;font-size:20px}
+#ctx{position:fixed;z-index:60;display:flex;flex-direction:column;min-width:150px;padding:6px;border:1px solid var(--hair);border-radius:10px;background:var(--panel);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+#ctx[hidden]{display:none}
+#ctx button{background:transparent;color:var(--ink);text-align:left;font-weight:500;padding:8px 12px;border-radius:6px}
+#ctx button:hover{background:var(--me-bg)}
 .ack{display:flex;flex-wrap:wrap;gap:10px;font-size:14px}
 .ack .ok{color:var(--GPT)} .ack .wait{color:var(--warn);font-weight:700}
 .empty{margin:auto;text-align:center;color:var(--ink-3)}
@@ -103,6 +134,7 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
   <header>
     <h2 id="title" data-t="pick"></h2>
     <div class="seats" id="seats"></div>
+    <button class="primary" id="inviteBtn" hidden data-t="invite"></button>
     <button class="ghost" id="cfgBtn" hidden data-t="models"></button>
     <button class="ghost" id="recall" hidden data-t="recall"></button>
     <button class="danger" id="closeBtn" hidden data-t="close"></button>
@@ -110,7 +142,9 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
   <div class="info" id="info" hidden></div>
   <p class="topic" id="topic" hidden></p>
   <div class="log" id="log"><div class="empty" data-t="emptyLog"></div></div>
+  <div id="replybar" hidden><span id="replytxt"></span><button type="button" id="replyx" aria-label="cancel">×</button></div>
   <footer><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
+  <div id="ctx" hidden></div>
   <div class="note" id="note"></div>
 </main>
 
@@ -131,6 +165,14 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
   <div class="acts"><button type="button" class="ghost" id="cancel" data-t="cancel"></button><button type="submit" class="primary" id="go" data-t="start"></button></div>
 </form></dialog>
 
+<dialog id="dlg3"><form id="form3" method="dialog">
+  <h3 data-t="invite"></h3>
+  <p style="margin:0;color:var(--ink-2);font-size:16px" data-t="inviteNote"></p>
+  <div class="invite" id="invSeats"></div>
+  <div class="err" id="i-err"></div>
+  <div class="acts"><button type="button" class="ghost" id="cancel3" data-t="cancel"></button><button type="submit" class="primary" id="go3" data-t="inviteGo"></button></div>
+</form></dialog>
+
 <dialog id="dlg2"><form id="form2" method="dialog">
   <h3 data-t="models"></h3>
   <p style="margin:0;color:var(--ink-2);font-size:16px" data-t="modelsNote"></p>
@@ -142,9 +184,16 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
 <script>
 const I18N={
  en:{app:"AI Meeting Room",new:"New meeting",pick:"Pick a meeting on the left, or start a new one",models:"Change models",recall:"Bring back",close:"Close meeting",
-   closeSure:"Close? Click again",emptyLog:"Messages from you and the AIs will appear here.",send:"Send",say:"Speak as the host… (Ctrl+Enter to send)",
+   closeSure:"Close? Click again",emptyLog:"Messages from you and the AIs will appear here.",send:"Send",say:"Speak as the host… (Enter to send, Shift+Enter for a new line; right-click a message to reply)",
    titleL:"Title",projL:"Project (every AI reads the same folder)",other:"Other folder…",otherPh:"Full path, e.g. /home/me/my-project",
-   modeL:"Meeting type",langL:"Meeting language",inviteL:"Invite (detected on this computer)",leadL:"Lead",topicL:"Topic (background, constraints, what to decide)",
+   enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
+   reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
+   vetoText:"✕ Rejected. Revise it now.",adoptText:"✓ Adopted.",
+   invite:"Invite",inviteGo:"Invite selected",inviteNote:"Tick the AIs to invite and pick their models. They join as soon as you confirm.",
+   leave:"ask to leave",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
+   deleted:"Meeting deleted.",deletedKept:p=>"Meeting deleted. The transcript saved in the project is kept: "+p,
+   noSeats:"No AI in the room yet — click Invite.",allSeated:"Every installed AI is already in this meeting.",
+   modeL:"Meeting type",langL:"Meeting language",inviteL:"Invite now (optional — you can also invite later)",leadL:"Lead",topicL:"Topic (background, constraints, what to decide)",
    topicPh:"Write down the constraints you have already decided; the AIs will follow them.",cancel:"Cancel",start:"Start meeting",apply:"Apply",
    modelsNote:"Only the AI you change rejoins with the new model; it reads the earlier messages and continues.",
    model:"Model",effort:"Reasoning effort",dflt:"default",notInstalled:"Not installed",notSigned:"Not signed in",
@@ -158,9 +207,16 @@ const I18N={
    noteSaved:p=>"Closed. Record saved to: "+p,noServer:"Cannot reach the meeting server: ",needAI:"Invite at least one AI.",
    meetings:{open:"open",closed:"closed",msgs:" msgs"},none:"No meetings yet"},
  "zh-TW":{app:"AI 會議室",new:"開新會議",pick:"請從左邊選一場會議,或開新會議",models:"換模型",recall:"請回席",close:"散會",
-   closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Ctrl+Enter 送出)",
+   closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Enter 送出、Shift+Enter 換行;在訊息上按右鍵可回覆)",
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
-   modeL:"會議類型",langL:"會議語言",inviteL:"邀請(自動偵測這台電腦裝了哪些)",leadL:"誰當主審",topicL:"議題說明(背景、限制、要討論出什麼)",
+   enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
+   reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
+   vetoText:"✕ 否決,請立刻改版。",adoptText:"✓ 採用。",
+   invite:"邀請",inviteGo:"邀請入席",inviteNote:"勾選要邀請的 AI、選好模型,按下確認就入席。",
+   leave:"請離席",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
+   deleted:"會議已刪除。",deletedKept:p=>"會議已刪除。已存回專案的逐字稿保留在:"+p,
+   noSeats:"會議室還沒有 AI,按「邀請」請人入席。",allSeated:"電腦裡裝的 AI 都已經在這場會議了。",
+   modeL:"會議類型",langL:"會議語言",inviteL:"現在就邀請(可不選,開會後再邀請)",leadL:"誰當主審",topicL:"議題說明(背景、限制、要討論出什麼)",
    topicPh:"把你已經決定的限制寫清楚,AI 會照著討論。",cancel:"取消",start:"開會",apply:"套用",
    modelsNote:"只有改到的那位 AI 會換新模型重新入席,並讀完前面的紀錄接著討論。",
    model:"模型",effort:"思考深度",dflt:"預設",notInstalled:"未安裝",notSigned:"尚未登入",
@@ -205,9 +261,16 @@ async function loadList(){
   let rows=[];try{rows=await api("/api/rooms");}catch(e){$("note").textContent=L().noServer+e.message;return;}
   const box=$("list");box.textContent="";
   if(!rows.length){const d=document.createElement("div");d.className="empty";d.style.padding="20px";d.textContent=L().none;box.appendChild(d);}
-  for(const r of rows){const b=document.createElement("button");b.className="item"+(r.id===cur?" on":"")+(r.closed?" closed":"");b.textContent=r.title;
+  for(const r of rows){const row=document.createElement("div");row.className="itemrow";
+    const b=document.createElement("button");b.className="item"+(r.id===cur?" on":"")+(r.closed?" closed":"");b.textContent=r.title;
     const s=document.createElement("small");s.textContent=(r.closed?L().meetings.closed:L().meetings.open)+" · "+r.created.slice(5,16).replace("T"," ")+" · "+r.count+L().meetings.msgs;
-    b.appendChild(s);b.onclick=()=>open(r.id);box.appendChild(b);}
+    b.appendChild(s);b.onclick=()=>open(r.id);
+    const d=document.createElement("button");d.className="del";d.textContent=L().del;d.title=L().delTitle;
+    d.onclick=async()=>{if(d.dataset.arm!=="1"){d.dataset.arm="1";d.textContent=L().delSure;setTimeout(()=>{d.dataset.arm="";d.textContent=L().del;},4000);return;}
+      try{const res=await post(R(r.id)+"/delete");if(r.id===cur){cur=null;clearInterval(timer);$("log").textContent="";$("title").textContent=L().pick;$("info").hidden=true;$("topic").hidden=true;$("seats").textContent="";
+        ["inviteBtn","cfgBtn","recall","closeBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
+        $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;loadList();}catch(e){$("note").textContent=e.message;}};
+    row.append(b,d);box.appendChild(row);}
 }
 
 function whoName(w){return w==="user"?L().host:w==="system"?L().system:w;}
@@ -218,8 +281,27 @@ function add(m){
   const w=document.createElement("span");w.className="who";w.textContent=whoName(m.who);
   const t=document.createElement("span");t.className="time";t.textContent=hm(m.at);meta.append(w,t);
   const body=document.createElement("div");body.className="body"+(/^(【小結】|\[SUMMARY\])/m.test(m.text)?" sum":"");body.textContent=m.text;
-  for(const f of m.imgs||[]){const a=document.createElement("a");a.href="/files/"+encodeURIComponent(cur)+"/"+encodeURIComponent(f);a.target="_blank";a.rel="noopener";
-    const im=document.createElement("img");im.src=a.href;im.alt=m.who;a.appendChild(im);body.appendChild(a);}
+  for(const f of m.imgs||[]){const src="/files/"+encodeURIComponent(cur)+"/"+encodeURIComponent(f);
+    if(/\.html?$/i.test(f)){const box=document.createElement("div");box.className="page";
+      const bar=document.createElement("div");bar.className="pagebar";const nm=document.createElement("span");nm.textContent=f;
+      const big=document.createElement("button");big.type="button";big.className="ghost";big.textContent=L().enlarge;
+      const tab=document.createElement("a");tab.href=src;tab.target="_blank";tab.rel="noopener";tab.textContent=L().newTab;
+      const fr=document.createElement("iframe");fr.src=src;fr.title=f;
+      big.onclick=()=>{box.classList.toggle("full");big.textContent=box.classList.contains("full")?L().shrink:L().enlarge;};
+      bar.append(nm,big,tab);box.append(bar,fr);body.appendChild(box);}
+    else{const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
+      const im=document.createElement("img");im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}}
+  const q=/^↩ #(\d+) ([^：\n]+)：([^\n]*)\n?/.exec(m.text);
+  if(q){body.textContent=m.text.slice(q[0].length);const qt=document.createElement("div");qt.className="quote";qt.textContent=q[2]+"："+q[3];
+    qt.onclick=()=>{const t=document.querySelector('.msg[data-seq="'+q[1]+'"]');if(t){t.scrollIntoView({behavior:"smooth",block:"center"});t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1200);}};
+    body.prepend(qt);}
+  box.dataset.seq=m.seq;
+  if(m.who!=="system"){const acts=document.createElement("span");acts.className="msgacts";
+    const mk=(label,title,fn)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.title=title;b.onclick=fn;acts.appendChild(b);};
+    mk("↩",L().reply,()=>startReply(m));
+    if(m.who!=="user"){mk("✕",L().veto,()=>react(m,"veto"));mk("✓",L().adopt,()=>react(m,"adopt"));}
+    meta.appendChild(acts);
+    box.addEventListener("contextmenu",e=>{e.preventDefault();openCtx(e,m);});}
   box.append(meta,body);
   if(m.who==="user"){const ack=document.createElement("div");ack.className="ack";ack.dataset.seq=m.seq;box.appendChild(ack);}
   log.appendChild(box);
@@ -231,9 +313,13 @@ function refreshAcks(){
 }
 function renderSeats(j){
   const box=$("seats");box.textContent="";
-  for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];
+  for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
     const i=document.createElement("i");const sm=document.createElement("small");sm.textContent=j.labels[s];
-    el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+" "),sm);box.appendChild(el);}
+    el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+" "),sm);
+    if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent="×";x.title=L().leave;x.setAttribute("aria-label",s+" "+L().leave);
+      x.onclick=async()=>{x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
+    box.appendChild(el);}
+  if(!curSeats.length&&!j.meta.closed){const h=document.createElement("span");h.className="noseat";h.textContent=L().noSeats;box.appendChild(h);}
 }
 
 async function poll(){
@@ -245,7 +331,7 @@ async function poll(){
     j.messages.forEach(add);last=j.last_seq;refreshAcks();
     if(j.messages.length&&atBottom)log.scrollTop=log.scrollHeight;
     closed=!!j.meta.closed;renderSeats(j);
-    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;
+    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
     $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):L().noteLive);
   }catch(e){$("note").textContent=L().noServer+e.message;}
@@ -263,22 +349,41 @@ async function open(id){
   try{history.replaceState(null,"","#"+encodeURIComponent(id));}catch(e){}
 }
 
+let REPLY=null;
+function snippet(m){const t=(m.text||"").replace(/^↩ #\d+ [^\n]*\n?/,"").replace(/\s+/g," ").trim();return(t.length>40?t.slice(0,40)+"…":t)||((m.imgs||[]).length?L().attachment:"");}
+function quoteLine(m){return"↩ #"+m.seq+" "+whoName(m.who)+"："+snippet(m)+"\n";}
+function startReply(m){REPLY=m;$("replytxt").textContent=L().replyTo+" "+whoName(m.who)+"："+snippet(m);$("replybar").hidden=false;$("say").focus();}
+function clearReply(){REPLY=null;$("replybar").hidden=true;}
+$("replyx").onclick=clearReply;
+async function postText(text){await post(R(cur)+"/messages",{text});await poll();$("log").scrollTop=$("log").scrollHeight;}
 async function send(){
-  const text=$("say").value.trim();if(!text||!cur)return;$("send").disabled=true;
-  try{await post(R(cur)+"/messages",{text});$("say").value="";await poll();$("log").scrollTop=$("log").scrollHeight;}
+  const raw=$("say").value.trim();if(!raw||!cur||closed)return;$("send").disabled=true;
+  try{await postText((REPLY?quoteLine(REPLY):"")+raw);$("say").value="";clearReply();}
   catch(e){$("note").textContent=e.message;}
   $("send").disabled=closed;
 }
+async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
+function openCtx(e,m){const c=$("ctx");c.textContent="";
+  const item=(label,fn)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.onclick=()=>{c.hidden=true;fn();};c.appendChild(b);};
+  item("↩ "+L().reply,()=>startReply(m));
+  if(m.who!=="user"){item("✕ "+L().veto,()=>react(m,"veto"));item("✓ "+L().adopt,()=>react(m,"adopt"));}
+  item("⧉ "+L().copy,()=>{try{navigator.clipboard.writeText(m.text);}catch(err){}});
+  c.hidden=false;const w=c.offsetWidth,h=c.offsetHeight;
+  c.style.left=Math.min(e.clientX,innerWidth-w-8)+"px";c.style.top=Math.min(e.clientY,innerHeight-h-8)+"px";}
+document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").hidden=true;});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("ctx").hidden=true;}});
 $("send").onclick=send;
-$("say").addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){e.preventDefault();send();}});
+$("say").addEventListener("keydown",e=>{
+  if(e.key==="Escape"&&REPLY){clearReply();return;}
+  if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send();}});
 $("closeBtn").onclick=async()=>{const b=$("closeBtn");if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent=L().closeSure;setTimeout(()=>{b.dataset.arm="";b.textContent=L().close;},4000);return;}
   await post(R(cur)+"/close");b.dataset.arm="";b.textContent=L().close;poll();loadList();};
-$("recall").onclick=async()=>{for(const el of $("seats").children){if(el.classList.contains("away")){const s=el.textContent.split(" ")[0];try{await post(R(cur)+"/seat",{seat:s});}catch(e){$("note").textContent=s+": "+e.message;}}}poll();};
+$("recall").onclick=async()=>{for(const el of $("seats").children){if(el.dataset.seat&&el.classList.contains("away")){const s=el.dataset.seat;try{await post(R(cur)+"/seat",{seat:s});}catch(e){$("note").textContent=s+": "+e.message;}}}poll();};
 function seatPicker(s,cfg,withCheck,agent){
   const M=MODELS[s],fs=document.createElement("fieldset");fs.dataset.seat=s;
   const lg=document.createElement("legend");
   if(withCheck){const lb=document.createElement("label");lb.className="chk";const cb=document.createElement("input");cb.type="checkbox";cb.className="inv";
-    cb.checked=!!(agent&&agent.installed);cb.disabled=!(agent&&agent.installed);lb.append(cb,document.createTextNode(" "+s));lg.appendChild(lb);
+    cb.checked=false;cb.disabled=!(agent&&agent.installed);fs.classList.add("off");lb.append(cb,document.createTextNode(" "+s));lg.appendChild(lb);
     cb.onchange=()=>{fs.classList.toggle("off",!cb.checked);syncLead();};}
   else lg.textContent=s;
   fs.appendChild(lg);
@@ -308,7 +413,7 @@ function syncLead(){const keep=$("f-lead").value;opt($("f-lead"),[["",L().equal]
 $("newBtn").onclick=async()=>{
   $("f-err").textContent="";$("f-lang").value=LANG;
   try{[MODELS,AGENTS]=await Promise.all([api("/api/models"),api("/api/agents")]);
-    const box=$("invite");box.textContent="";for(const s of ALL)box.appendChild(seatPicker(s,{},true,AGENTS[s]));syncLead();
+    const box=$("invite");box.textContent="";for(const s of ALL)box.appendChild(seatPicker(s,(MODELS.last||{})[s]||{},true,AGENTS[s]));syncLead();
     const ps=await api("/api/projects");const sel=$("f-proj");
     opt(sel,ps.map(p=>[p.path,p.name+"  ("+p.path+")"]).concat([["__other",L().other]]),sel.value||(ps[0]&&ps[0].path)||"__other");
     sel.onchange=()=>{$("f-proj-other").hidden=sel.value!=="__other";};sel.onchange();
@@ -317,7 +422,7 @@ $("newBtn").onclick=async()=>{
 };
 $("cancel").onclick=()=>$("dlg").close();
 $("form").addEventListener("submit",async e=>{e.preventDefault();
-  const seats=invited();if(!seats.length){$("f-err").textContent=L().needAI;return;}
+  const seats=invited();
   const cfg=readPickers($("invite"));$("go").disabled=true;
   try{const j=await post("/api/rooms",{title:$("f-title").value,topic:$("f-topic").value,seats,seat_cfg:cfg,lang:$("f-lang").value,
       project:$("f-proj").value==="__other"?$("f-proj-other").value:$("f-proj").value,mode:$("f-mode").value,lead:$("f-lead").value});
@@ -325,6 +430,21 @@ $("form").addEventListener("submit",async e=>{e.preventDefault();
   catch(err){$("f-err").textContent=err.message;}
   $("go").disabled=false;
 });
+$("inviteBtn").onclick=async()=>{$("i-err").textContent="";
+  try{[MODELS,AGENTS]=await Promise.all([api("/api/models"),api("/api/agents")]);const box=$("invSeats");box.textContent="";
+    const free=ALL.filter(s=>!curSeats.includes(s));
+    if(!free.length){const p=document.createElement("p");p.className="hint";p.textContent=L().allSeated;box.appendChild(p);}
+    for(const s of free)box.appendChild(seatPicker(s,(MODELS.last||{})[s]||{},true,AGENTS[s]));}catch(e){$("i-err").textContent=e.message;}
+  $("dlg3").showModal();};
+$("cancel3").onclick=()=>$("dlg3").close();
+$("form3").addEventListener("submit",async e=>{e.preventDefault();
+  const box=$("invSeats"),cfg=readPickers(box);
+  const pick=[...box.querySelectorAll("fieldset")].filter(fs=>{const c=fs.querySelector("input.inv");return c&&c.checked;}).map(fs=>fs.dataset.seat);
+  if(!pick.length){$("dlg3").close();return;}
+  $("go3").disabled=true;
+  try{for(const s of pick)await post(R(cur)+"/invite",{seat:s,cfg:cfg[s]});$("dlg3").close();MODELS=null;poll();}
+  catch(err){$("i-err").textContent=err.message;}
+  $("go3").disabled=false;});
 $("cfgBtn").onclick=async()=>{$("c-err").textContent="";
   try{MODELS=MODELS||await api("/api/models");const box=$("cfgSeats");box.textContent="";const sc=(curMeta&&curMeta.seat_cfg)||{};
     for(const s of curSeats)box.appendChild(seatPicker(s,sc[s]||{},false));}catch(e){$("c-err").textContent=e.message;}

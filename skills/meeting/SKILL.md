@@ -33,8 +33,8 @@ Use the first folder containing `hub.py`: `$AI_MEETING_ROOM_DIR`, then `~/ai-mee
 - `lang`: `en` or `zh-TW`, matching the user's language.
 - `mode`: `discuss` (default) or `review` when the user wants code checked.
 - `lead`: `""` (equal discussion, everyone read-only, default) or the AI the user names as lead. The lead edits code in an isolated git worktree outside the project; push / deploy need the user's yes.
-- `seats` (optional): which AIs to invite; omit to invite every AI installed on this computer.
-- `seat_cfg` (optional): **only if the user asked for specific models.** Otherwise omit; each CLI uses its default.
+- `seats`: **leave it out by default** — the meeting starts empty and the user clicks Invite in the page. Fill it only when the user names the AIs (e.g. "meet with GPT and Gemini").
+- `seat_cfg`: **only if the user asked for specific models.** Otherwise omit (the room reuses the user's last choices).
 
 ## 4. Create the meeting and open the tab
 
@@ -43,7 +43,7 @@ It prints one JSON line: meeting id, URL, which AIs took their seats.
 
 ## 5. Tell the user (short)
 
-Title, project, roles, URL. One line: "Type in the page to interject — the AIs answer you first. Click Close meeting to end it." If an AI failed to take its seat, say why.
+Title, project, URL. One line: "Click Invite to bring AIs in; right-click a message to reply or reject; Close meeting ends it." If an AI failed to take its seat, say why. Do not relay the meeting message by message; report once after it closes.
 
 ## 6. Wait for the meeting to end in the background
 

@@ -2,7 +2,11 @@
 set -e
 PORT="${MEETING_PORT:-7720}"
 URL="http://127.0.0.1:$PORT/"
-if curl -fs -o /dev/null "${URL}api/rooms"; then echo "already running: $URL"; exit 0; fi
+if curl -fs -o /dev/null "${URL}api/rooms"; then
+  if [ "$1" != "--restart" ]; then echo "already running: $URL"; exit 0; fi
+  curl -fs -o /dev/null -X POST -H "Content-Type: application/json" -d '{}' "${URL}api/shutdown" || true
+  for _ in $(seq 40); do sleep 0.5; curl -fs -o /dev/null "${URL}api/rooms" || break; done
+fi
 PY="$(command -v python3 || command -v python)"
 [ -z "$PY" ] && { echo "Python 3.9+ not found" >&2; exit 1; }
 HOME_DIR="${MEETING_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/ai-meeting-room}"

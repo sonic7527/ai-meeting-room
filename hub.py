@@ -53,6 +53,8 @@ SEATS = ("Claude", "GPT", "Gemini")
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 WAIT_MAX = 240
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+PAGE_EXT = {".html", ".htm"}
+ATTACH_MAX = 8 * 1024 * 1024
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LANGS = ("en", "zh-TW")
 
@@ -75,6 +77,11 @@ T = {
         "export_fail": "Saving the meeting record failed: {err}",
         "seat_fail": "{seat} failed to start: {err}",
         "model_changed": "{seat} switched to {label} and rejoined.",
+        "auto_back": "{seat} stopped unexpectedly ({why}) and was brought back automatically.",
+        "resumed": "The meeting room restarted; {seat} rejoined.",
+        "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
+        "invited": "The {host} invited {seat} ({label}).",
+        "dismissed": "The {host} asked {seat} to leave.",
         "default": "default", "account_default": "Account default",
         "efforts": {"": "default", "low": "low", "medium": "medium", "high": "high", "xhigh": "x-high",
                     "max": "max", "ultra": "ultra"},
@@ -82,7 +89,7 @@ T = {
         "run_limit": "The host has not replied yet and the AIs have sent {n} messages in a row. Call wait_for_messages and wait for the host.",
         "closed_no_speak": "The meeting is closed. You can no longer speak.",
         "empty": "The message is empty.",
-        "bad_image": "Image not found or unsupported type: {p}",
+        "bad_image": "Attachment not found, too large (8 MB max) or unsupported (png/jpg/webp/gif/html): {p}",
         "no_new": "No new messages. Call wait_for_messages again.",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
         "need_git": "A lead needs a git project (the lead edits code in an isolated git worktree). "
@@ -94,11 +101,17 @@ T = {
         "transcript": {"time": "Started", "project": "Project", "type": "Type", "models": "Models",
                        "worktree": "Lead's copy", "merge": "merge is the host's decision", "topic": "Topic",
                        "log": "Transcript"},
-        "img_note": "You can generate images with your built-in image tool: save the file in your current working "
-                    "folder and pass its full path as image_path in send_message.",
-        "no_img": "You cannot generate images; ask GPT if a picture is needed.",
-        "no_shell": "\n- 🔴 **Never run terminal / shell commands** (they are refused in background mode and end your "
-                    "session). Read files only with your file-viewing tools.",
+        "img_note": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no "
+                    "external URLs) in the `html` field of send_message; the room shows it inline and interactive. You "
+                    "can also make images with your built-in image tool and pass the file path as attach_path. Never "
+                    "ask the host to open a URL and never start a web server.",
+        "no_img": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no external "
+                  "URLs) in the `html` field of send_message; the room shows it inline and interactive. You do not need "
+                  "to write any file. Never ask the host to open a URL.",
+        "no_shell": "\n- 🔴 **You may only read. Never write or edit any file, never run terminal / shell commands, and "
+                    "read files only inside the project folder or the meeting folder {seats}** (where the other AIs keep "
+                    "their files). Anything else is refused in background mode and throws you out of the meeting. "
+                    "Mock-ups go in the `html` field of send_message instead of a file.",
     },
     "zh-TW": {
         "host": os.environ.get("MEETING_HOST_NAME", "主持人"), "system": "系統",
@@ -111,13 +124,18 @@ T = {
         "export_fail": "會議紀錄匯出失敗:{err}",
         "seat_fail": "{seat} 啟動失敗:{err}",
         "model_changed": "{seat} 改用 {label},重新入席。",
+        "auto_back": "{seat} 意外離席({why}),已自動請回。",
+        "resumed": "會議室重新啟動,{seat} 重新入席。",
+        "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
+        "invited": "{host}邀請 {seat} 入席({label})。",
+        "dismissed": "{host}請 {seat} 離席。",
         "default": "預設", "account_default": "帳號預設",
         "efforts": {"": "預設", "low": "低", "medium": "中", "high": "高", "xhigh": "更高", "max": "最高", "ultra": "極限"},
         "stale": "你的入席證已失效(這個席位已由新的程序接手)。請立即結束,不要再呼叫任何工具。",
         "run_limit": "{host}還沒回應,AI 已連講 {n} 則。請呼叫 wait_for_messages 等{host}發言。",
         "closed_no_speak": "已散會,不能再發言。",
         "empty": "發言內容是空的。",
-        "bad_image": "圖檔不存在或格式不支援:{p}",
+        "bad_image": "附件不存在、超過 8 MB,或格式不支援(png/jpg/webp/gif/html):{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
         "need_git": "指定主審需要 git 專案(主審在獨立副本裡改程式);這個資料夾不是 git 專案,請改用平等討論",
@@ -127,9 +145,13 @@ T = {
         "agy_allow": "agy 還沒允許會議室工具:請在邀請區按「允許會議室工具」。",
         "transcript": {"time": "時間", "project": "專案", "type": "類型", "models": "模型",
                        "worktree": "主審副本", "merge": "合併與否由主持人決定", "topic": "議題", "log": "逐字稿"},
-        "img_note": "你可以用內建圖片生成功能出圖:把圖存在目前工作資料夾,send_message 時把完整路徑放進 image_path。",
-        "no_img": "你不能出圖;需要圖時請 GPT 畫。",
-        "no_shell": "\n- 🔴 **絕對不要執行任何終端機指令**(背景模式會拒絕,而且會讓你直接離席)。讀檔一律用檔案檢視工具。",
+        "img_note": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
+                    "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能出圖,把檔案路徑放進 attach_path。"
+                    "不要叫{host}開網址,也不要自己架伺服器。",
+        "no_img": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
+                  "html 欄位,會議室會直接嵌在你的發言下面、可以操作。不需要寫任何檔案,也不要叫{host}開網址。",
+        "no_shell": "\n- 🔴 **你只能讀:絕對不要寫檔或改檔、不要執行任何終端機指令;讀檔只限專案資料夾與會議資料夾 {seats}**"
+                    "(其他 AI 的檔案放在這裡)。做了以上任何一件,背景模式會拒絕並把你踢出會議。樣板請放在 send_message 的 html 欄位,不要寫檔。",
     },
 }
 
@@ -205,7 +227,8 @@ def load_rooms():
 
 
 def room_seats(room):
-    return [x for x in (room.meta.get("seats") or SEATS) if x in SEATS]
+    seats = room.meta.get("seats")
+    return [x for x in (SEATS if seats is None else seats) if x in SEATS]
 
 
 def others_of(room, seat, lang=None):
@@ -412,9 +435,29 @@ def model_options():
         gpt.insert(0, {"id": dm, "label": dm, "note": "", "efforts": ["low", "medium", "high"]})
     return {"Claude": {"models": [{"id": m, "label": m.capitalize()} for m in CLAUDE_MODELS],
                        "efforts": CLAUDE_EFFORTS, "default": {"model": "", "effort": ""}},
+            "last": last_models(),
             "GPT": {"models": gpt, "default": {"model": dm, "effort": de}},
             "Gemini": {"models": [{"id": "", "label": ""}] + agy_models(), "efforts": ["low", "medium", "high", "max"],
                        "default": {"model": "", "effort": ""}}}
+
+
+def last_models():
+    try:
+        with open(os.path.join(LOCAL, "last_models.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        return {k: v for k, v in d.items() if k in SEATS and isinstance(v, dict)}
+    except (OSError, ValueError):
+        return {}
+
+
+def remember_models(cfg):
+    if not cfg:
+        return
+    d = last_models()
+    d.update({k: v for k, v in cfg.items() if k in SEATS})
+    os.makedirs(LOCAL, exist_ok=True)
+    with open(os.path.join(LOCAL, "last_models.json"), "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=1)
 
 
 def seat_label(room, seat):
@@ -606,7 +649,7 @@ def seat_prompt(room, seat, ticket):
            "TITLE": room.meta["title"], "TOPIC": room.meta["topic"], "PROJECT": project_of(room),
            "MODE": tx(room, "modes")[room.meta.get("mode") or "discuss"], "ROLE": role_text(room, seat),
            "IMAGE": (tx(room, "img_note") if seat == "GPT" else tx(room, "no_img"))
-                    + (tx(room, "no_shell") if seat == "Gemini" else ""),
+                    + (tx(room, "no_shell", seats=os.path.join(LOCAL, "seats", room.id)) if seat == "Gemini" else ""),
            "HOST": tx(room, "host"), "TICKET": ticket}
     for k, v in rep.items():
         tpl = tpl.replace("{{" + k + "}}", v)
@@ -662,7 +705,7 @@ def start_seat(room, seat, restart=False):
         with open(os.path.join(work, ".agents", "mcp_config.json"), "w", encoding="utf-8") as f:
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
         mode = "accept-edits" if lead == "Gemini" else "plan"
-        args = [exe, "--mode", mode, "--add-dir", project_of(room)]
+        args = [exe, "--mode", mode, "--add-dir", project_of(room), "--add-dir", seat_dir]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
         if cfg.get("effort"):
@@ -679,11 +722,12 @@ def start_seat(room, seat, restart=False):
         meet = ("mcp__meeting__join_meeting,mcp__meeting__send_message,"
                 "mcp__meeting__wait_for_messages,mcp__meeting__read_messages")
         if lead == "Claude":
-            args = [exe, "-p", "--mcp-config", mcp_cfg, "--strict-mcp-config", "--permission-mode", "acceptEdits",
+            args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
+                    "--permission-mode", "acceptEdits",
                     "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write," + bash_rules(LEAD_BASH),
                     "--disallowedTools", "NotebookEdit,WebFetch,WebSearch,Bash(git push:*),Bash(ssh:*),Bash(rm:*)"]
         else:
-            args = [exe, "-p", "--mcp-config", mcp_cfg, "--strict-mcp-config",
+            args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
                     "--allowedTools", meet + ",Read,Grep,Glob," + bash_rules(READ_BASH),
                     "--disallowedTools", "Edit,Write,NotebookEdit"]
         if cfg.get("model"):
@@ -704,6 +748,75 @@ def start_seat(room, seat, restart=False):
     p.stdin.close()
     room.procs[seat] = p
     return "seated"
+
+
+RESTARTS = {}
+
+
+def _exit_reason(room, seat):
+    try:
+        with open(os.path.join(LOCAL, "seats", room.id, f"{seat}.log"), encoding="utf-8", errors="replace") as f:
+            tail = f.read()[-600:]
+    except OSError:
+        return "?"
+    m = re.search(r'required the "([a-z_]+)" permission', tail)
+    if m:
+        return m.group(1) + " denied"
+    return "exited"
+
+
+def watchdog():
+    while True:
+        time.sleep(10)
+        for room in list(ROOMS.values()):
+            if room.meta.get("closed"):
+                continue
+            for seat in room_seats(room):
+                p = room.procs.get(seat)
+                if p is None or p.poll() is None or seat not in (room.meta.get("tickets") or {}):
+                    continue
+                key = (room.id, seat)
+                recent = [t for t in RESTARTS.get(key, []) if time.time() - t < 900]
+                why = _exit_reason(room, seat)
+                room.procs.pop(seat, None)
+                if len(recent) >= 3:
+                    room.add("system", tx(room, "auto_gave_up", seat=seat, why=why))
+                    RESTARTS[key] = recent
+                    continue
+                RESTARTS[key] = recent + [time.time()]
+                try:
+                    start_seat(room, seat)
+                    room.add("system", tx(room, "auto_back", seat=seat, why=why))
+                except Exception as e:
+                    room.add("system", tx(room, "seat_fail", seat=seat, err=e))
+
+
+def resume_seats():
+    for room in list(ROOMS.values()):
+        if room.meta.get("closed"):
+            continue
+        for seat in room_seats(room):
+            if seat not in (room.meta.get("tickets") or {}):
+                continue
+            try:
+                start_seat(room, seat)
+                room.add("system", tx(room, "resumed", seat=seat))
+            except Exception as e:
+                room.add("system", tx(room, "seat_fail", seat=seat, err=e))
+
+
+def stop_seat(room, seat):
+    (room.meta.get("tickets") or {}).pop(seat, None)
+    room.save_meta()
+    p = room.procs.pop(seat, None)
+    if p is not None and p.poll() is None:
+        p.terminate()
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    with room.cond:
+        room.cond.notify_all()
 
 
 def export_room(room):
@@ -735,7 +848,7 @@ def export_room(room):
             src = os.path.join(room.dir, f)
             if os.path.isfile(src):
                 shutil.copyfile(src, os.path.join(out, f))
-                lines += [f"![]({f})", ""]
+                lines += [f"[{f}]({f})" if f.lower().endswith(tuple(PAGE_EXT)) else f"![]({f})", ""]
     with open(os.path.join(out, "transcript.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     shutil.copyfile(os.path.join(room.dir, "log.jsonl"), os.path.join(out, "log.jsonl"))
@@ -776,11 +889,17 @@ TOOLS = [
          "name": {"type": "string", "enum": list(SEATS), "description": "your seat"},
          "ticket": _TICKET}, "required": ["room", "name", "ticket"]}},
     {"name": "send_message",
-     "description": "Speak in the meeting, in the meeting's language. To attach an image, put its full file path "
-                    "(png/jpg/webp/gif) in image_path.",
+     "description": "Speak in the meeting, in the meeting's language. To show the host a mock-up or animation, put a "
+                    "complete self-contained HTML page in `html`; to show an existing image or HTML file, put its full "
+                    "path in attach_path. The room shows it right under your message and HTML stays interactive, so "
+                    "never ask the host to open a URL or start a server.",
      "inputSchema": {"type": "object", "properties": {
          "room": {"type": "string"}, "name": {"type": "string", "enum": list(SEATS)},
-         "text": {"type": "string"}, "image_path": {"type": "string"}, "ticket": _TICKET},
+         "text": {"type": "string"},
+         "html": {"type": "string", "description": "A complete self-contained HTML page (inline CSS/JS, no external "
+                  "URLs) to show under your message, e.g. a mock-up or animation. No file writing needed."},
+         "attach_path": {"type": "string"}, "image_path": {"type": "string"},
+         "ticket": _TICKET},
          "required": ["room", "name", "ticket", "text"]}},
     {"name": "wait_for_messages",
      "description": "Wait for new messages from the host or the other AI. after_seq = the last message number you "
@@ -831,12 +950,19 @@ def call_tool(name, a):
         if not text:
             return {"ok": False, "reason": tx(room, "empty")}
         imgs = []
-        ip = a.get("image_path")
-        if ip:
+        page = a.get("html")
+        if isinstance(page, str) and page.strip():
+            if len(page.encode("utf-8")) > ATTACH_MAX:
+                return {"ok": False, "reason": tx(room, "bad_image", p="html")}
+            fn = f"{len(room.msgs) + 1:03d}_{seat}_page.html"
+            with open(os.path.join(room.dir, fn), "w", encoding="utf-8") as f:
+                f.write(page)
+            imgs.append(fn)
+        for ip in [x for x in (a.get("attach_path"), a.get("image_path")) if x]:
             ext = os.path.splitext(ip)[1].lower()
-            if ext not in IMG_EXT or not os.path.isfile(ip):
+            if ext not in IMG_EXT | PAGE_EXT or not os.path.isfile(ip) or os.path.getsize(ip) > ATTACH_MAX:
                 return {"ok": False, "reason": tx(room, "bad_image", p=ip)}
-            fn = f"{len(room.msgs) + 1:03d}_{seat}{ext}"
+            fn = f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}{ext}"
             shutil.copyfile(ip, os.path.join(room.dir, fn))
             imgs.append(fn)
         return {"ok": True, "seq": room.add(seat, text, imgs)["seq"]}
@@ -956,10 +1082,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(404, {"error": "not found"})
             p = os.path.join(DATA, parts[1], parts[2])
             ext = os.path.splitext(p)[1].lower()
-            if ext not in IMG_EXT or not os.path.isfile(p):
+            if ext not in IMG_EXT | PAGE_EXT or not os.path.isfile(p):
                 return self._send(404, {"error": "not found"})
             with open(p, "rb") as f:
-                return self._send(200, f.read(), "image/jpeg" if ext in (".jpg", ".jpeg") else f"image/{ext[1:]}")
+                data = f.read()
+            if ext in PAGE_EXT:
+                return self._send(200, data, "text/html; charset=utf-8",
+                                  headers={"Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals",
+                                           "X-Content-Type-Options": "nosniff"})
+            return self._send(200, data, "image/jpeg" if ext in (".jpg", ".jpeg") else f"image/{ext[1:]}")
         return self._send(404, {"error": "not found"})
 
     def do_DELETE(self):
@@ -986,6 +1117,10 @@ class H(BaseHTTPRequestHandler):
         try:
             b = self._body()
             if parts == ["api", "shutdown"]:
+                for room in list(ROOMS.values()):
+                    for p in list(room.procs.values()):
+                        if p.poll() is None:
+                            p.terminate()
                 self._send(200, {"ok": True})
                 threading.Thread(target=SERVER.shutdown, daemon=True).start()
                 return
@@ -1007,12 +1142,47 @@ class H(BaseHTTPRequestHandler):
                     if not r.meta.get("closed"):
                         close_room(r)
                     return self._send(200, {"ok": True})
+                if act == "invite":
+                    s = b.get("seat")
+                    if s not in SEATS or r.meta.get("closed"):
+                        return self._send(400, {"error": "invalid seat or meeting closed"})
+                    if "cfg" in b:
+                        r.meta.setdefault("seat_cfg", {})[s] = clean_cfg({s: b["cfg"]})[s]
+                        remember_models({s: r.meta["seat_cfg"][s]})
+                    if s not in room_seats(r):
+                        r.meta["seats"] = room_seats(r) + [s]
+                    r.save_meta()
+                    try:
+                        res = start_seat(r, s)
+                    except Exception as e:
+                        r.add("system", tx(r, "seat_fail", seat=s, err=e))
+                        return self._send(400, {"error": str(e)})
+                    r.add("system", tx(r, "invited", seat=s, label=seat_label(r, s)))
+                    return self._send(200, {"result": res})
+                if act == "dismiss":
+                    s = b.get("seat")
+                    if s not in room_seats(r):
+                        return self._send(400, {"error": "not in the meeting"})
+                    stop_seat(r, s)
+                    r.meta["seats"] = [x for x in room_seats(r) if x != s]
+                    r.save_meta()
+                    r.add("system", tx(r, "dismissed", seat=s))
+                    return self._send(200, {"ok": True})
+                if act == "delete":
+                    for x in list(r.procs):
+                        stop_seat(r, x)
+                    with ROOMS_LOCK:
+                        ROOMS.pop(r.id, None)
+                    shutil.rmtree(r.dir, ignore_errors=True)
+                    shutil.rmtree(os.path.join(LOCAL, "seats", r.id), ignore_errors=True)
+                    return self._send(200, {"ok": True, "kept": r.meta.get("export") or ""})
                 if act == "seat":
                     s = b.get("seat")
                     if s not in SEATS or r.meta.get("closed"):
                         return self._send(400, {"error": "invalid seat or meeting closed"})
                     if "cfg" in b:
                         r.meta.setdefault("seat_cfg", {})[s] = clean_cfg({s: b["cfg"]})[s]
+                        remember_models({s: r.meta["seat_cfg"][s]})
                         r.save_meta()
                         res = start_seat(r, s, restart=True)
                         r.add("system", tx(r, "model_changed", seat=s, label=seat_label(r, s)))
@@ -1035,12 +1205,13 @@ class H(BaseHTTPRequestHandler):
         lead, mode = b.get("lead") or "", b.get("mode") or "discuss"
         if lead not in ("", *SEATS) or mode not in ("discuss", "review") or lang not in LANGS:
             return self._send(400, {"error": "invalid lead, mode or language"})
-        seats = [x for x in (b.get("seats") or []) if x in SEATS] or [x for x, v in agents().items() if v["installed"]]
-        if lead and lead not in seats:
-            return self._send(400, {"error": "the lead must be one of the invited AIs / 主審必須是受邀的 AI"})
+        seats = [x for x in (b.get("seats") or []) if x in SEATS]
+        given = {k: v for k, v in clean_cfg(b.get("seat_cfg")).items() if k in (b.get("seat_cfg") or {})}
+        seat_cfg = {**{k: v for k, v in last_models().items() if k in SEATS}, **given}
+        remember_models({k: v for k, v in given.items() if k in seats})
         remember_project(proj)
         try:
-            r = new_room(title, topic, clean_cfg(b.get("seat_cfg")), proj, lead, mode, lang, seats)
+            r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats)
         except RuntimeError as e:
             return self._send(400, {"error": str(e)})
         started = {}
@@ -1063,6 +1234,8 @@ def main():
     load_rooms()
     SERVER = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     SERVER.daemon_threads = True
+    threading.Thread(target=resume_seats, daemon=True).start()
+    threading.Thread(target=watchdog, daemon=True).start()
     print(f"AI Meeting Room {VERSION}: http://127.0.0.1:{PORT}/", flush=True)
     print(f"data: {LOCAL}\ncodex: {find_codex() or 'NOT FOUND'}\nclaude: {find_claude() or 'NOT FOUND'}", flush=True)
     SERVER.serve_forever()
