@@ -1,0 +1,24 @@
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$port = if ($env:MEETING_PORT) { $env:MEETING_PORT } else { "7720" }
+$url = "http://127.0.0.1:$port/"
+try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "${url}api/rooms" | Out-Null; Write-Output "already running: $url"; exit 0 } catch {}
+
+$py = $null
+foreach ($c in @("$env:LOCALAPPDATA\Python\bin\python.exe") + @("py", "python3", "python" | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source })) {
+    if (-not $c -or -not (Test-Path $c)) { continue }
+    & $c -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>$null
+    if ($LASTEXITCODE -eq 0) { $py = $c; break }
+}
+if (-not $py) { Write-Error "Python 3.9+ not found"; exit 1 }
+
+$home_ = if ($env:MEETING_HOME) { $env:MEETING_HOME } else { Join-Path $env:LOCALAPPDATA "ai-meeting-room" }
+New-Item -ItemType Directory -Force $home_ | Out-Null
+Start-Process -FilePath $py -ArgumentList "-u", "`"$(Join-Path $PSScriptRoot 'hub.py')`"" -WindowStyle Hidden `
+    -RedirectStandardOutput (Join-Path $home_ "hub.log") -RedirectStandardError (Join-Path $home_ "hub.err.log")
+for ($i = 0; $i -lt 40; $i++) {
+    Start-Sleep -Milliseconds 500
+    try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "${url}api/rooms" | Out-Null; Write-Output "started: $url"; exit 0 } catch {}
+}
+Write-Error "did not start in time; see $home_\hub.err.log"
+exit 1
