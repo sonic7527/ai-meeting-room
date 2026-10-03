@@ -124,6 +124,7 @@ Set environment variables, or put a `config.json` next to `hub.py` (ignored by g
 
 - Developed and tested on **Windows 11** with Claude Code 2.1, Codex CLI 0.159 and Antigravity CLI (Gemini 3.8 Flash). macOS / Linux paths are implemented but not yet tested — reports welcome.
 - Each AI speaks when its own turn finishes, so replies arrive in bursts rather than as live typing.
+- The page polls every 1.5 s; a slow poll is skipped instead of overlapping, and messages already shown are never drawn again (earlier versions could show the same message twice while the AIs were busy).
 - Running all three AIs uses all three subscriptions' quotas at once.
 - **Windows + Claude desktop app:** programs installed from inside the app's terminal land in the app's private folder and are invisible to your own PowerShell. Install the CLIs from your own terminal.
 - **Windows + Microsoft Store Python:** the Store build runs in an app container, so the AI seats it starts exit at once ("Broken pipe") and its files land in a private folder. `start_bg.ps1` now skips it when another Python 3.9+ is installed; set `MEETING_PYTHON` to pick one yourself.

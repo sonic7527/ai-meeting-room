@@ -322,21 +322,26 @@ function renderSeats(j){
   if(!curSeats.length&&!j.meta.closed){const h=document.createElement("span");h.className="noseat";h.textContent=L().noSeats;box.appendChild(h);}
 }
 
+let polling=false,openTok=0;
 async function poll(){
-  if(!cur)return;
+  if(!cur||polling)return;
+  polling=true;const room=cur;
   try{
-    const j=await api(R(cur)+"/messages?after="+last);
+    const j=await api(R(room)+"/messages?after="+last);
+    if(room!==cur)return;
     const log=$("log");const atBottom=log.scrollHeight-log.scrollTop-log.clientHeight<80;
     curMeta=j.meta;curSeats=Object.keys(j.seats);for(const s of curSeats)SEQS[s]=SEQS[s]||[];
-    j.messages.forEach(add);last=j.last_seq;refreshAcks();
-    if(j.messages.length&&atBottom)log.scrollTop=log.scrollHeight;
+    const fresh=j.messages.filter(m=>m.seq>last);fresh.forEach(add);last=Math.max(last,j.last_seq);refreshAcks();
+    if(fresh.length&&atBottom)log.scrollTop=log.scrollHeight;
     closed=!!j.meta.closed;renderSeats(j);
     $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
     $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):L().noteLive);
   }catch(e){$("note").textContent=L().noServer+e.message;}
+  finally{polling=false;}
 }
 async function open(id){
+  const tok=++openTok;
   cur=id;last=0;$("log").textContent="";clearInterval(timer);for(const k in SEQS)delete SEQS[k];
   try{const j=await api(R(id)+"/messages?after=0");const m=j.meta;
     $("title").textContent=m.title;$("topic").hidden=false;$("topic").textContent=m.topic;
@@ -345,7 +350,9 @@ async function open(id){
     if(m.branch)rows.push([L().info.copy,m.worktree+" ("+m.branch+")"]);
     for(const[k,v]of rows){const s=document.createElement("span");const b=document.createElement("b");b.textContent=k+": ";s.append(b,v||"—");inf.appendChild(s);}
   }catch(e){}
-  await poll();$("log").scrollTop=$("log").scrollHeight;timer=setInterval(poll,1500);loadList();
+  if(tok!==openTok)return;
+  await poll();if(tok!==openTok)return;
+  $("log").scrollTop=$("log").scrollHeight;clearInterval(timer);timer=setInterval(poll,1500);loadList();
   try{history.replaceState(null,"","#"+encodeURIComponent(id));}catch(e){}
 }
 
