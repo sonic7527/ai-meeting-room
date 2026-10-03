@@ -64,7 +64,7 @@ bash ~/ai-meeting-room/start_bg.sh --restart
 
 ### Gemini 第一次要做的設定
 
-Antigravity 命令列程式在背景執行時沒辦法跳出詢問,要先在它的設定裡允許會議室工具。在「邀請」(或「開新會議」)視窗的 Gemini 欄位按「允許會議室工具」,它只會在 `~/.gemini/antigravity-cli/settings.json` 加一條 `mcp(meeting/*)` 規則,其他都不動。
+Antigravity 命令列程式在背景執行時沒辦法跳出詢問,要先在它的設定裡允許會議室工具。在「邀請」(或「開新會議」)視窗的 Gemini 欄位按「允許會議室工具」,它只會在 `~/.gemini/antigravity-cli/settings.json` 加三條規則:`mcp(meeting/*)`(會議室工具)、`read_url(*)` 和 `search_web(*)`(讓它能打開你貼的網址),其他都不動。三位 AI 都能讀網頁:Claude 直接打開網頁;Gemini 用 `read_url` 打開;GPT 用 Codex 的網頁搜尋,讀到的是搜尋引擎存的版本,可能比網頁現況舊。
 
 ### 選用:給 Claude Code 的「開會」指令
 

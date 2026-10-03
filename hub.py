@@ -349,13 +349,14 @@ def find_gemini():
 
 
 AGY_SETTINGS = os.path.join(os.path.expanduser("~"), ".gemini", "antigravity-cli", "settings.json")
-AGY_RULE = "mcp(meeting/*)"
+AGY_RULES = ["mcp(meeting/*)", "read_url(*)", "search_web(*)"]
 
 
 def agy_allows_meeting():
     try:
         with open(AGY_SETTINGS, encoding="utf-8") as f:
-            return AGY_RULE in ((json.load(f).get("permissions") or {}).get("allow") or [])
+            have = (json.load(f).get("permissions") or {}).get("allow") or []
+        return all(r in have for r in AGY_RULES)
     except (OSError, ValueError):
         return False
 
@@ -367,8 +368,9 @@ def allow_meeting_in_agy():
     except (OSError, ValueError):
         d = {}
     allow = d.setdefault("permissions", {}).setdefault("allow", [])
-    if AGY_RULE not in allow:
-        allow.append(AGY_RULE)
+    missing = [r for r in AGY_RULES if r not in allow]
+    if missing:
+        allow.extend(missing)
         os.makedirs(os.path.dirname(AGY_SETTINGS), exist_ok=True)
         with open(AGY_SETTINGS, "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
@@ -754,7 +756,7 @@ def start_seat(room, seat, restart=False):
             root, extra = work, []
         args = [exe, "exec", "--skip-git-repo-check", "-C", root, *extra, "-s", "workspace-write",
                 "-c", f'mcp_servers.meeting.url="{url}"',
-                "-c", "mcp_servers.meeting.tool_timeout_sec=300",
+                "-c", "mcp_servers.meeting.tool_timeout_sec=300", "-c", "tools.web_search=true",
                 "-c", 'mcp_servers.meeting.default_tools_approval_mode="approve"']
         if cfg.get("model"):
             args += ["-m", cfg["model"]]
@@ -795,11 +797,11 @@ def start_seat(room, seat, restart=False):
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
                     "--permission-mode", "acceptEdits",
                     "--add-dir", seat_dir,
-                    "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write,Bash",
-                    "--disallowedTools", "NotebookEdit,WebFetch,WebSearch,PowerShell," + bash_rules(LEAD_DENY)]
+                    "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write,Bash,WebFetch,WebSearch",
+                    "--disallowedTools", "NotebookEdit,PowerShell," + bash_rules(LEAD_DENY)]
         else:
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
-                    "--allowedTools", meet + ",Read,Grep,Glob," + bash_rules(READ_BASH),
+                    "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch," + bash_rules(READ_BASH),
                     "--disallowedTools", "Edit,Write,NotebookEdit"]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
