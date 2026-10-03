@@ -65,6 +65,55 @@ MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "1024")) * 1024 * 1
 ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT)
 
 
+VIDEO_EXT = {".mp4", ".webm", ".mov"}
+FRAMES_N = 12
+
+
+def frames_dir(room, f):
+    return os.path.join(room.dir, ".frames", f)
+
+
+def make_frames(room, f):
+    src = os.path.join(room.dir, f)
+    out = frames_dir(room, f)
+    ff, fp = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if not ff or not fp or os.path.isdir(out):
+        return
+    os.makedirs(out, exist_ok=True)
+    try:
+        dur = float(subprocess.run([fp, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src],
+                                   capture_output=True, text=True, timeout=60, creationflags=NO_WINDOW).stdout.strip())
+    except (ValueError, subprocess.SubprocessError):
+        return
+    for i in range(FRAMES_N):
+        t = dur * (i + 0.5) / FRAMES_N
+        subprocess.run([ff, "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", src, "-frames:v", "1", "-vf", "scale=960:-2",
+                        os.path.join(out, f"{i + 1:02d}_{int(t // 60):02d}m{t % 60:04.1f}s.jpg")],
+                       capture_output=True, timeout=120, creationflags=NO_WINDOW)
+    with open(os.path.join(out, "info.json"), "w", encoding="utf-8") as fh:
+        json.dump({"duration_sec": round(dur, 1)}, fh)
+
+
+def frames_later(room, f):
+    if os.path.splitext(f)[1].lower() in VIDEO_EXT:
+        threading.Thread(target=make_frames, args=(room, f), daemon=True).start()
+
+
+def attach_info(room, f):
+    p = os.path.join(room.dir, f)
+    d = {"path": p}
+    if os.path.splitext(f)[1].lower() in VIDEO_EXT:
+        fd = frames_dir(room, f)
+        if os.path.isdir(fd):
+            d["frames"] = [os.path.join(fd, x) for x in sorted(os.listdir(fd)) if x.endswith(".jpg")]
+            try:
+                with open(os.path.join(fd, "info.json"), encoding="utf-8") as fh:
+                    d.update(json.load(fh))
+            except (OSError, ValueError):
+                d["frames_note"] = "key frames are still being extracted; read the messages again shortly"
+    return d
+
+
 def size_ok(path_or_size, ext):
     n = path_or_size if isinstance(path_or_size, int) else os.path.getsize(path_or_size)
     return n <= (MEDIA_MAX if ext in MEDIA_EXT else ATTACH_MAX)
@@ -775,7 +824,7 @@ def start_seat(room, seat, restart=False):
         with open(os.path.join(work, ".agents", "mcp_config.json"), "w", encoding="utf-8") as f:
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
         mode = "accept-edits" if lead == "Gemini" else "plan"
-        args = [exe, "--mode", mode, "--add-dir", project_of(room), "--add-dir", seat_dir]
+        args = [exe, "--mode", mode, "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
         if lead == "Gemini":
             args.append("--dangerously-skip-permissions")
         if cfg.get("model"):
@@ -796,11 +845,12 @@ def start_seat(room, seat, restart=False):
         if lead == "Claude":
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
                     "--permission-mode", "acceptEdits",
-                    "--add-dir", seat_dir,
+                    "--add-dir", seat_dir, "--add-dir", room.dir,
                     "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write,Bash,WebFetch,WebSearch",
                     "--disallowedTools", "NotebookEdit,PowerShell," + bash_rules(LEAD_DENY)]
         else:
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
+                    "--add-dir", room.dir,
                     "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch," + bash_rules(READ_BASH),
                     "--disallowedTools", "Edit,Write,NotebookEdit"]
         if cfg.get("model"):
@@ -1025,7 +1075,8 @@ TOOLS = [
 def fmt(room, msgs):
     host = tx(room, "host")
     return [{"seq": m["seq"], "who": host if m["who"] == "user" else m["who"], "text": m["text"],
-             "has_image": bool(m.get("imgs")), "at": m["at"]} for m in msgs]
+             "has_image": bool(m.get("imgs")), "files": [attach_info(room, f) for f in m.get("imgs") or []],
+             "at": m["at"]} for m in msgs]
 
 
 def call_tool(name, a):
@@ -1072,6 +1123,7 @@ def call_tool(name, a):
             fn = f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}{ext}"
             shutil.copyfile(ip, os.path.join(room.dir, fn))
             imgs.append(fn)
+            frames_later(room, fn)
         return {"ok": True, "seq": room.add(seat, text, imgs)["seq"]}
     if name == "wait_for_messages":
         after = int(a.get("after_seq", 0))
@@ -1200,6 +1252,7 @@ class H(BaseHTTPRequestHandler):
         if left > 0:
             os.remove(dst)
             return self._send(400, {"error": "upload interrupted"})
+        frames_later(room, fn)
         return self._send(200, {"file": fn})
 
     def _body(self):

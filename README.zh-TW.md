@@ -107,7 +107,7 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 可以設環境變數,或在 `hub.py` 旁邊放一個 `config.json`(不會進 git),例如
 `{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`allowed_origins`、`image_max_mb`、`media_max_mb`。兩者都有時以環境變數為準。
 
-附件:圖片和網頁檔上限 `image_max_mb`(預設 32 MB),影片和音樂(mp4、webm、mov、mp3、m4a、wav)上限 `media_max_mb`(預設 1024 MB)。主持人可以按 📎、把檔案拖進發言欄,或直接貼上;影片在網頁裡直接播放、可以拖進度條。散會時影音檔留在會議室自己的資料夾,不會複製進你的專案。
+附件:圖片和網頁檔上限 `image_max_mb`(預設 32 MB),影片和音樂(mp4、webm、mov、mp3、m4a、wav)上限 `media_max_mb`(預設 1024 MB)。主持人可以按 📎、把檔案拖進發言欄,或直接貼上;影片在網頁裡直接播放、可以拖進度條。散會時影音檔留在會議室自己的資料夾,不會複製進你的專案。AI 看得到你貼的附件:每則訊息會附上檔案路徑,圖片它們直接打開看;影片則由會議室平均抽 12 張關鍵畫面(要裝 ffmpeg)加上影片長度給它們看。
 
 `allowed_origins`(環境變數 `MEETING_ALLOWED_ORIGINS`,逗號分隔)列出可以送出操作的額外網頁來源,例如透過通道用手機進會議室時填 `["https://你的通道網址"]`。只能用在需要登入的通道後面:打得開這個網頁的人就能操作會議。
 
