@@ -6,7 +6,7 @@
 
 - **Uses the subscriptions you already have.** Claude runs through Claude Code (your Claude account), GPT through OpenAI Codex (your ChatGPT account), Gemini through Antigravity CLI (your Google account). No API keys.
 - **Auto-detects** which of the three are installed and signed in. Nobody joins until you click **Invite**; invite or dismiss any AI at any time.
-- **You are the host.** Interjections are answered first, every host message shows who has replied, the AIs never end the meeting on their own, and they pause after 8 messages in a row without you. Rejections are acted on immediately.
+- **You are the host.** Interjections are answered first, every host message shows who has replied, the AIs never end the meeting on their own, and they pause after 8 messages in a row without you. A ✕ rejection only marks that version — the AIs wait until you have reviewed the rest and say what to change; an explicit change request is acted on immediately.
 - **Chat-app feel.** Right-click any message to reply to it, reject (✕) or adopt (✓) it in one click; Enter sends, Shift+Enter adds a line.
 - **Mock-ups right in the conversation.** An AI can post a self-contained HTML page with its message; it is shown inline and stays interactive (animations, buttons, dragging) — no URLs to open.
 - **Same project, same context.** Pick a folder; every AI reads the same files (CLAUDE.md, AGENTS.md, GEMINI.md, README) before speaking.
