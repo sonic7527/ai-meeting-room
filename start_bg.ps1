@@ -15,11 +15,16 @@ if ($running) {
 }
 
 $py = $null
-foreach ($c in @("$env:LOCALAPPDATA\Python\bin\python.exe") + @("py", "python3", "python" | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source })) {
+$store = $null
+$cands = @($env:MEETING_PYTHON, "$env:LOCALAPPDATA\Python\bin\python.exe") + @("python3", "python", "py" | ForEach-Object { (Get-Command $_ -ErrorAction SilentlyContinue).Source })
+foreach ($c in $cands) {
     if (-not $c -or -not (Test-Path $c)) { continue }
-    & $c -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)" 2>$null
-    if ($LASTEXITCODE -eq 0) { $py = $c; break }
+    $exe = & $c -c "import sys; print(sys.executable if sys.version_info >= (3, 9) else '')" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $exe) { continue }
+    if ("$exe" -match "WindowsApps") { if (-not $store) { $store = $c }; continue }
+    $py = $exe; break
 }
+if (-not $py) { $py = $store }
 if (-not $py) { Write-Error "Python 3.9+ not found"; exit 1 }
 
 $home_ = if ($env:MEETING_HOME) { $env:MEETING_HOME } else { Join-Path $env:LOCALAPPDATA "ai-meeting-room" }
