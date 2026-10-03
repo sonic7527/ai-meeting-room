@@ -105,7 +105,9 @@ Claude seats load only the project's shared settings (`--setting-sources project
 ## Configuration
 
 Set environment variables, or put a `config.json` next to `hub.py` (ignored by git), e.g.
-`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`, `allowed_origins`. Environment variables win.
+`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`, `allowed_origins`, `image_max_mb`, `media_max_mb`. Environment variables win.
+
+Attachments: images and HTML pages up to `image_max_mb` (default 32), video/audio (mp4, webm, mov, mp3, m4a, wav) up to `media_max_mb` (default 1024). The host can attach files with the 📎 button, by dragging them onto the message box or by pasting; videos play in the page and can be seeked. When a meeting closes, video/audio stays in the meeting room's own folder and is not copied into your project.
 
 `allowed_origins` (env `MEETING_ALLOWED_ORIGINS`, comma-separated) lists extra page origins allowed to send actions, e.g. `["https://your-tunnel.example"]` when you reach the room from your phone through a tunnel. Only do this behind a tunnel that requires login: anyone who can open the page can run the meeting.
 

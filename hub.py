@@ -26,7 +26,8 @@ def _load_local_config():
         return
     for key, var in (("host_name", "MEETING_HOST_NAME"), ("lang", "MEETING_LANG"), ("port", "MEETING_PORT"),
                      ("project", "MEETING_PROJECT"), ("home", "MEETING_HOME"), ("export_dir", "MEETING_EXPORT_DIR"),
-                     ("ai_run_limit", "MEETING_AI_RUN_LIMIT")):
+                     ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
+                     ("media_max_mb", "MEETING_MEDIA_MAX_MB")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
     if cfg.get("allowed_origins") and not os.environ.get("MEETING_ALLOWED_ORIGINS"):
@@ -57,7 +58,16 @@ AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 WAIT_MAX = 240
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 PAGE_EXT = {".html", ".htm"}
-ATTACH_MAX = 8 * 1024 * 1024
+MEDIA_EXT = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+             ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}
+ATTACH_MAX = int(float(os.environ.get("MEETING_IMAGE_MAX_MB", "32")) * 1024 * 1024)
+MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "1024")) * 1024 * 1024)
+ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT)
+
+
+def size_ok(path_or_size, ext):
+    n = path_or_size if isinstance(path_or_size, int) else os.path.getsize(path_or_size)
+    return n <= (MEDIA_MAX if ext in MEDIA_EXT else ATTACH_MAX)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LANGS = ("en", "zh-TW")
 
@@ -92,7 +102,8 @@ T = {
         "run_limit": "The host has not replied yet and the AIs have sent {n} messages in a row. Call wait_for_messages and wait for the host.",
         "closed_no_speak": "The meeting is closed. You can no longer speak.",
         "empty": "The message is empty.",
-        "bad_image": "Attachment not found, too large (8 MB max) or unsupported (png/jpg/webp/gif/html): {p}",
+        "bad_image": "Attachment not found, too large (images/pages {img_mb} MB, video/audio {media_mb} MB max) or "
+                     "unsupported (png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav): {p}",
         "no_new": "No new messages. Call wait_for_messages again.",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
         "need_git": "A lead needs a git project (the lead edits code in an isolated git worktree). "
@@ -103,7 +114,8 @@ T = {
         "agy_allow": "agy has not allowed the meeting tools yet. Click \"Allow meeting tools\" in the invite panel.",
         "transcript": {"time": "Started", "project": "Project", "type": "Type", "models": "Models",
                        "worktree": "Lead's copy", "merge": "merge is the host's decision", "topic": "Topic",
-                       "log": "Transcript", "dropped": "not kept: not adopted"},
+                       "log": "Transcript", "dropped": "not kept: not adopted",
+                       "media": "video/audio stays in the meeting room folder, not copied here"},
         "img_note": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no "
                     "external URLs) in the `html` field of send_message; the room shows it inline and interactive. You "
                     "can also make images with your built-in image tool and pass the file path as attach_path. Never "
@@ -138,7 +150,8 @@ T = {
         "run_limit": "{host}還沒回應,AI 已連講 {n} 則。請呼叫 wait_for_messages 等{host}發言。",
         "closed_no_speak": "已散會,不能再發言。",
         "empty": "發言內容是空的。",
-        "bad_image": "附件不存在、超過 8 MB,或格式不支援(png/jpg/webp/gif/html):{p}",
+        "bad_image": "附件不存在、太大(圖片/網頁 {img_mb} MB、影音 {media_mb} MB 以內),或格式不支援"
+                     "(png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav):{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
         "need_git": "指定主審需要 git 專案(主審在獨立副本裡改程式);這個資料夾不是 git 專案,請改用平等討論",
@@ -148,7 +161,7 @@ T = {
         "agy_allow": "agy 還沒允許會議室工具:請在邀請區按「允許會議室工具」。",
         "transcript": {"time": "時間", "project": "專案", "type": "類型", "models": "模型",
                        "worktree": "主審副本", "merge": "合併與否由主持人決定", "topic": "議題", "log": "逐字稿",
-                       "dropped": "未保留:沒有採用"},
+                       "dropped": "未保留:沒有採用", "media": "影音檔留在會議室資料夾,不複製到專案"},
         "img_note": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
                     "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能出圖,把檔案路徑放進 attach_path。"
                     "不要叫{host}開網址,也不要自己架伺服器。",
@@ -879,6 +892,9 @@ def export_room(room):
                     os.remove(dst)
                 lines += [f"`{f}` ({L['dropped']})", ""]
                 continue
+            if os.path.splitext(f)[1].lower() in MEDIA_EXT:
+                lines += [f"`{f}` ({L['media']})", ""]
+                continue
             if os.path.isfile(src):
                 shutil.copyfile(src, dst)
                 lines += [f"[{f}]({f})" if f.lower().endswith(tuple(PAGE_EXT)) else f"![]({f})", ""]
@@ -986,15 +1002,17 @@ def call_tool(name, a):
         page = a.get("html")
         if isinstance(page, str) and page.strip():
             if len(page.encode("utf-8")) > ATTACH_MAX:
-                return {"ok": False, "reason": tx(room, "bad_image", p="html")}
+                return {"ok": False, "reason": tx(room, "bad_image", p="html", img_mb=ATTACH_MAX >> 20,
+                                                  media_mb=MEDIA_MAX >> 20)}
             fn = f"{len(room.msgs) + 1:03d}_{seat}_page.html"
             with open(os.path.join(room.dir, fn), "w", encoding="utf-8") as f:
                 f.write(page)
             imgs.append(fn)
         for ip in [x for x in (a.get("attach_path"), a.get("image_path")) if x]:
             ext = os.path.splitext(ip)[1].lower()
-            if ext not in IMG_EXT | PAGE_EXT or not os.path.isfile(ip) or os.path.getsize(ip) > ATTACH_MAX:
-                return {"ok": False, "reason": tx(room, "bad_image", p=ip)}
+            if ext not in ALL_EXT or not os.path.isfile(ip) or not size_ok(ip, ext):
+                return {"ok": False, "reason": tx(room, "bad_image", p=ip, img_mb=ATTACH_MAX >> 20,
+                                                  media_mb=MEDIA_MAX >> 20)}
             fn = f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}{ext}"
             shutil.copyfile(ip, os.path.join(room.dir, fn))
             imgs.append(fn)
@@ -1068,6 +1086,66 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_file(self, path, ctype):
+        size = os.path.getsize(path)
+        start, end = 0, size - 1
+        rng = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
+        if rng and (rng.group(1) or rng.group(2)):
+            if rng.group(1):
+                start = int(rng.group(1))
+                end = min(int(rng.group(2)), size - 1) if rng.group(2) else size - 1
+            else:
+                start = max(size - int(rng.group(2)), 0)
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        else:
+            self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(end - start + 1))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
+    def _upload(self, room, query):
+        name = (parse_qs(query).get("name") or [""])[0]
+        ext = os.path.splitext(name)[1].lower()
+        n = int(self.headers.get("Content-Length") or 0)
+        if room.meta.get("closed"):
+            return self._send(400, {"error": tx(room, "closed_no_speak")})
+        if ext not in ALL_EXT or n <= 0 or not size_ok(n, ext):
+            return self._send(400, {"error": tx(room, "bad_image", p=name, img_mb=ATTACH_MAX >> 20,
+                                                  media_mb=MEDIA_MAX >> 20)})
+        fn = f"up_{uuid.uuid4().hex[:10]}{ext}"
+        dst = os.path.join(room.dir, fn)
+        left = n
+        with open(dst, "wb") as f:
+            while left > 0:
+                chunk = self.rfile.read(min(1 << 20, left))
+                if not chunk:
+                    break
+                f.write(chunk)
+                left -= len(chunk)
+        if left > 0:
+            os.remove(dst)
+            return self._send(400, {"error": "upload interrupted"})
+        return self._send(200, {"file": fn})
+
     def _body(self):
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b""
@@ -1115,8 +1193,10 @@ class H(BaseHTTPRequestHandler):
                 return self._send(404, {"error": "not found"})
             p = os.path.join(DATA, parts[1], parts[2])
             ext = os.path.splitext(p)[1].lower()
-            if ext not in IMG_EXT | PAGE_EXT or not os.path.isfile(p):
+            if ext not in ALL_EXT or not os.path.isfile(p):
                 return self._send(404, {"error": "not found"})
+            if ext in MEDIA_EXT:
+                return self._send_file(p, MEDIA_EXT[ext])
             with open(p, "rb") as f:
                 data = f.read()
             if ext in PAGE_EXT:
@@ -1147,6 +1227,11 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, out, headers=hdr)
         if not self._local_origin():
             return self._send(403, {"error": "local page only"})
+        if parts[:2] == ["api", "rooms"] and len(parts) == 4 and parts[3] == "upload":
+            try:
+                return self._upload(get_room(parts[2]), u.query)
+            except KeyError:
+                return self._send(404, {"error": "not found"})
         try:
             b = self._body()
             if parts == ["api", "shutdown"]:
@@ -1166,11 +1251,13 @@ class H(BaseHTTPRequestHandler):
                 r, act = get_room(parts[2]), parts[3]
                 if act == "messages":
                     text = (b.get("text") or "").strip()
-                    if not text:
+                    files = [f for f in (b.get("files") or []) if isinstance(f, str) and f.startswith("up_")
+                             and os.path.basename(f) == f and os.path.isfile(os.path.join(r.dir, f))]
+                    if not text and not files:
                         return self._send(400, {"error": tx(r, "empty")})
                     if r.meta.get("closed"):
                         return self._send(400, {"error": tx(r, "closed_no_speak")})
-                    return self._send(200, r.add("user", text))
+                    return self._send(200, r.add("user", text, files))
                 if act == "close":
                     if not r.meta.get("closed"):
                         close_room(r)

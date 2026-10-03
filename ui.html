@@ -79,6 +79,14 @@ header h2{margin:0;font-size:24px;flex:1 1 260px;min-width:0}
 .pagebar button{padding:3px 10px;font-size:14px}
 .pagebar a{color:var(--me);font-weight:600}
 .page iframe{display:block;width:100%;height:560px;border:0;background:var(--bg)}
+.body video{display:block;width:100%;max-height:640px;margin-top:10px;border-radius:10px;border:1px solid var(--hair);background:#000}
+.body audio{display:block;width:100%;margin-top:10px}
+#clip{flex:0 0 auto;padding:10px 12px;font-size:20px;line-height:1}
+#pending{display:flex;flex-wrap:wrap;gap:6px;padding:0 24px}
+#pending:empty{display:none}
+#pending span{display:inline-flex;align-items:center;gap:6px;font-size:14px;padding:3px 10px;border-radius:99px;border:1px solid var(--hair);background:var(--panel);color:var(--ink-2)}
+#pending button{padding:0 4px;background:transparent;border:0;color:var(--ink-3);font-size:15px;line-height:1}
+footer.drop{outline:2px dashed var(--ink-3);outline-offset:-6px}
 .page.full{position:fixed;inset:12px;z-index:50;margin:0;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.45)}
 .page.full iframe{flex:1;height:auto}
 .quote{border-left:3px solid var(--ink-3);padding:2px 10px;margin-bottom:8px;font-size:14px;color:var(--ink-2);cursor:pointer;
@@ -143,7 +151,8 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
   <p class="topic" id="topic" hidden></p>
   <div class="log" id="log"><div class="empty" data-t="emptyLog"></div></div>
   <div id="replybar" hidden><span id="replytxt"></span><button type="button" id="replyx" aria-label="cancel">×</button></div>
-  <footer><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
+  <div id="pending"></div>
+  <footer><button type="button" class="ghost" id="clip" disabled>📎</button><input type="file" id="pick" multiple hidden accept="image/*,video/*,audio/*,.html,.htm"><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
   <div id="ctx" hidden></div>
   <div class="note" id="note"></div>
 </main>
@@ -188,6 +197,7 @@ const I18N={
    titleL:"Title",projL:"Project (every AI reads the same folder)",other:"Other folder…",otherPh:"Full path, e.g. /home/me/my-project",
    enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
    reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
+   attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",uploading:"Uploading",uploadFail:"Upload failed",
    vetoText:"✕ Rejected. Revise it now.",adoptText:"✓ Adopted.",
    invite:"Invite",inviteGo:"Invite selected",inviteNote:"Tick the AIs to invite and pick their models. They join as soon as you confirm.",
    leave:"ask to leave",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
@@ -211,6 +221,7 @@ const I18N={
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
    enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
    reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
+   attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",uploading:"上傳中",uploadFail:"上傳失敗",
    vetoText:"✕ 否決,請立刻改版。",adoptText:"✓ 採用。",
    invite:"邀請",inviteGo:"邀請入席",inviteNote:"勾選要邀請的 AI、選好模型,按下確認就入席。",
    leave:"請離席",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
@@ -289,6 +300,8 @@ function add(m){
       const fr=document.createElement("iframe");fr.src=src;fr.title=f;
       big.onclick=()=>{box.classList.toggle("full");big.textContent=box.classList.contains("full")?L().shrink:L().enlarge;};
       bar.append(nm,big,tab);box.append(bar,fr);body.appendChild(box);}
+    else if(/\.(mp4|webm|mov)$/i.test(f)){const v=document.createElement("video");v.src=src;v.controls=true;v.preload="metadata";v.playsInline=true;body.appendChild(v);}
+    else if(/\.(mp3|m4a|wav)$/i.test(f)){const au=document.createElement("audio");au.src=src;au.controls=true;au.preload="metadata";body.appendChild(au);}
     else{const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
       const im=document.createElement("img");im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}}
   const q=/^↩ #(\d+) ([^：\n]+)：([^\n]*)\n?/.exec(m.text);
@@ -334,7 +347,7 @@ async function poll(){
     const fresh=j.messages.filter(m=>m.seq>last);fresh.forEach(add);last=Math.max(last,j.last_seq);refreshAcks();
     if(fresh.length&&atBottom)log.scrollTop=log.scrollHeight;
     closed=!!j.meta.closed;renderSeats(j);
-    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;
+    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;$("clip").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
     $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):L().noteLive);
   }catch(e){$("note").textContent=L().noServer+e.message;}
@@ -362,10 +375,23 @@ function quoteLine(m){return"↩ #"+m.seq+" "+whoName(m.who)+"："+snippet(m)+"\
 function startReply(m){REPLY=m;$("replytxt").textContent=L().replyTo+" "+whoName(m.who)+"："+snippet(m);$("replybar").hidden=false;$("say").focus();}
 function clearReply(){REPLY=null;$("replybar").hidden=true;}
 $("replyx").onclick=clearReply;
-async function postText(text){await post(R(cur)+"/messages",{text});await poll();$("log").scrollTop=$("log").scrollHeight;}
+async function postText(text,files){await post(R(cur)+"/messages",{text,files:files||[]});await poll();$("log").scrollTop=$("log").scrollHeight;}
+let PENDING=[],UPLOADS=0;
+function drawPending(){const box=$("pending");box.textContent="";
+  for(const f of PENDING){const sp=document.createElement("span");sp.textContent=f.label;
+    const x=document.createElement("button");x.type="button";x.textContent="×";x.onclick=()=>{PENDING=PENDING.filter(y=>y!==f);drawPending();};
+    if(f.file)sp.appendChild(x);box.appendChild(sp);}}
+async function uploadFiles(list){if(!cur||closed)return;
+  for(const file of list){const tag={label:L().uploading+" "+file.name+"…",file:null};PENDING.push(tag);drawPending();UPLOADS++;
+    try{const r=await fetch(R(cur)+"/upload?name="+encodeURIComponent(file.name),{method:"POST",body:file});
+      const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+      tag.file=j.file;tag.label=file.name+" ("+(file.size>=1048576?(file.size/1048576).toFixed(1)+" MB":Math.ceil(file.size/1024)+" KB")+")";}
+    catch(e){PENDING=PENDING.filter(y=>y!==tag);$("note").textContent=L().uploadFail+": "+file.name+" — "+e.message;}
+    UPLOADS--;drawPending();}}
 async function send(){
-  const raw=$("say").value.trim();if(!raw||!cur||closed)return;$("send").disabled=true;
-  try{await postText((REPLY?quoteLine(REPLY):"")+raw);$("say").value="";clearReply();}
+  const raw=$("say").value.trim();const files=PENDING.filter(f=>f.file).map(f=>f.file);
+  if((!raw&&!files.length)||!cur||closed||UPLOADS)return;$("send").disabled=true;
+  try{await postText((REPLY?quoteLine(REPLY):"")+raw,files);$("say").value="";clearReply();PENDING=[];drawPending();}
   catch(e){$("note").textContent=e.message;}
   $("send").disabled=closed;
 }
@@ -380,6 +406,12 @@ function openCtx(e,m){const c=$("ctx");c.textContent="";
 document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").hidden=true;});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("ctx").hidden=true;}});
 $("send").onclick=send;
+$("clip").title=L().attach;$("clip").onclick=()=>$("pick").click();
+$("pick").onchange=()=>{uploadFiles([...$("pick").files]);$("pick").value="";};
+for(const ev of["dragenter","dragover"])document.querySelector("footer").addEventListener(ev,e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes("Files")){e.preventDefault();e.currentTarget.classList.add("drop");}});
+document.querySelector("footer").addEventListener("dragleave",e=>e.currentTarget.classList.remove("drop"));
+document.querySelector("footer").addEventListener("drop",e=>{e.preventDefault();e.currentTarget.classList.remove("drop");if(e.dataTransfer.files.length)uploadFiles([...e.dataTransfer.files]);});
+$("say").addEventListener("paste",e=>{const fs=[...(e.clipboardData&&e.clipboardData.files||[])];if(fs.length){e.preventDefault();uploadFiles(fs);}});
 $("say").addEventListener("keydown",e=>{
   if(e.key==="Escape"&&REPLY){clearReply();return;}
   if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send();}});
