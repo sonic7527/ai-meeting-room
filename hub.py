@@ -349,7 +349,7 @@ def find_gemini():
 
 
 AGY_SETTINGS = os.path.join(os.path.expanduser("~"), ".gemini", "antigravity-cli", "settings.json")
-AGY_RULES = ["mcp(meeting/*)", "read_url(*)", "search_web(*)"]
+AGY_RULES = ["mcp(meeting/*)", "read_url(*)"]
 
 
 def agy_allows_meeting():
