@@ -147,6 +147,7 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
     <button class="primary" id="inviteBtn" hidden data-t="invite"></button>
     <button class="ghost" id="cfgBtn" hidden data-t="models"></button>
     <button class="ghost" id="recall" hidden data-t="recall"></button>
+    <button class="ghost" id="autoBtn" hidden></button>
     <button class="danger" id="closeBtn" hidden data-t="close"></button>
   </header>
   <div class="info" id="info" hidden></div>
@@ -216,6 +217,8 @@ const I18N={
    info:{project:"Project",type:"Type",role:"Roles",copy:"Lead's copy"},replied:" replied",pending:" pending",
    noteLive:"The AIs speak for themselves here; interject any time and they answer you first.",
    noteRun:(n)=>"The AIs have sent "+n+" messages in a row and are waiting for you.",
+   autoOn:"Autonomous mode",autoOnTip:"Let the AIs work on their own until the task is done or reaches a milestone (no need to wait for you)",
+   autoOff:"★ Autonomous — click to stop",noteAuto:"Autonomous mode: the AIs keep working until they post a [MILESTONE].",
    noteClosed:"Closed. The AIs are leaving; the record will be saved into the project's docs/meetings/.",
    noteSaved:p=>"Closed. Record saved to: "+p,noServer:"Cannot reach the meeting server: ",needAI:"Invite at least one AI.",
    meetings:{open:"open",closed:"closed",msgs:" msgs"},none:"No meetings yet"},
@@ -241,6 +244,8 @@ const I18N={
    info:{project:"專案",type:"類型",role:"角色",copy:"主審副本"},replied:" 已回應",pending:" 待回應",
    noteLive:"AI 會在這裡各自發言;你隨時可以插話,他們會先回應你。",
    noteRun:(n)=>"AI 已連講 "+n+" 則,正在等你發言。",
+   autoOn:"自主會議",autoOnTip:"讓 AI 不用等你回覆,自己把工作做完或做到告一段落再出成果",
+   autoOff:"★ 自主中(按一下停止)",noteAuto:"自主會議中:AI 會自己做到發出「【階段成果】」為止。",
    noteClosed:"已散會,AI 退場中,紀錄稍後存回專案的 docs/meetings/。",
    noteSaved:p=>"已散會,紀錄已存到:"+p,noServer:"連不到會議室伺服器:",needAI:"至少邀請一位 AI。",
    meetings:{open:"進行中",closed:"已散會",msgs:" 則"},none:"還沒有會議"}};
@@ -283,7 +288,7 @@ async function loadList(){
     const d=document.createElement("button");d.className="del";d.textContent=L().del;d.title=L().delTitle;
     d.onclick=async()=>{if(d.dataset.arm!=="1"){d.dataset.arm="1";d.textContent=L().delSure;setTimeout(()=>{d.dataset.arm="";d.textContent=L().del;},4000);return;}
       try{const res=await post(R(r.id)+"/delete");if(r.id===cur){cur=null;clearInterval(timer);$("log").textContent="";$("title").textContent=L().pick;$("info").hidden=true;$("topic").hidden=true;$("seats").textContent="";
-        ["inviteBtn","cfgBtn","recall","closeBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
+        ["inviteBtn","cfgBtn","recall","closeBtn","autoBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
         $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;loadList();}catch(e){$("note").textContent=e.message;}};
     row.append(b,d);box.appendChild(row);}
 }
@@ -358,7 +363,9 @@ async function poll(){
     closed=!!j.meta.closed;renderSeats(j);
     $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;$("clip").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
-    $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):L().noteLive);
+    const ab=$("autoBtn");ab.hidden=closed;ab.textContent=j.meta.auto?L().autoOff:L().autoOn;ab.title=L().autoOnTip;
+    ab.className=j.meta.auto?"primary":"ghost";
+    $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):(j.meta.auto?L().noteAuto:L().noteLive));
   }catch(e){$("note").textContent=L().noServer+e.message;}
   finally{polling=false;}
 }
@@ -424,6 +431,9 @@ $("say").addEventListener("paste",e=>{const fs=[...(e.clipboardData&&e.clipboard
 $("say").addEventListener("keydown",e=>{
   if(e.key==="Escape"&&REPLY){clearReply();return;}
   if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send();}});
+$("autoBtn").onclick=async()=>{const b=$("autoBtn");if(!cur)return;b.disabled=true;
+  try{const j=await (await fetch(R(cur)+"/messages?after=99999")).json();await post(R(cur)+"/auto",{on:!j.meta.auto});await open(cur);}
+  catch(e){$("note").textContent=e.message;}b.disabled=false;};
 $("closeBtn").onclick=async()=>{const b=$("closeBtn");if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent=L().closeSure;setTimeout(()=>{b.dataset.arm="";b.textContent=L().close;},4000);return;}
   await post(R(cur)+"/close");b.dataset.arm="";b.textContent=L().close;poll();loadList();};
 $("recall").onclick=async()=>{for(const el of $("seats").children){if(el.dataset.seat&&el.classList.contains("away")){const s=el.dataset.seat;try{await post(R(cur)+"/seat",{seat:s});}catch(e){$("note").textContent=s+": "+e.message;}}}poll();};

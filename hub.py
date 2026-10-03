@@ -26,7 +26,7 @@ def _load_local_config():
         return
     for key, var in (("host_name", "MEETING_HOST_NAME"), ("lang", "MEETING_LANG"), ("port", "MEETING_PORT"),
                      ("project", "MEETING_PROJECT"), ("home", "MEETING_HOME"), ("export_dir", "MEETING_EXPORT_DIR"),
-                     ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
+                     ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("auto_run_limit", "MEETING_AUTO_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
                      ("media_max_mb", "MEETING_MEDIA_MAX_MB")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
@@ -55,6 +55,13 @@ ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in os.environ.get("MEETING_ALLOWE
 DEFAULT_LANG = os.environ.get("MEETING_LANG", "en")
 SEATS = ("Claude", "GPT", "Gemini")
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
+AUTO_RUN_LIMIT = int(os.environ.get("MEETING_AUTO_RUN_LIMIT", "120"))
+DONE_MARK = ("【階段成果】", "[MILESTONE]")
+
+
+def run_limit(room):
+    """自主會議:AI 可以連續工作到告一段落(只留一個防失控的安全上限);一般會議:連講 AI_RUN_LIMIT 則就等主持人"""
+    return AUTO_RUN_LIMIT if room.meta.get("auto") else AI_RUN_LIMIT
 WAIT_MAX = 240
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 PAGE_EXT = {".html", ".htm"}
@@ -150,6 +157,13 @@ T = {
         "proj_changed": "⚠️ The original project {project} changed during the meeting: {files}. If this was not you, "
                         "check it with git and restore it.",
         "dismissed": "The {host} asked {seat} to leave.",
+        "auto_on": "The {host} turned on **autonomous mode**: do not wait for the {host}. Split the work among "
+                   "yourselves and keep going until the task is done or reaches a natural milestone. Then ONE of you "
+                   "posts a message starting with [MILESTONE] that lists what was done, the output files and what "
+                   "the {host} needs to decide; after that everyone calls wait_for_messages. (Safety cap: {n} "
+                   "messages in a row.)",
+        "auto_off": "The {host} turned off autonomous mode; back to at most {n} messages in a row before waiting.",
+        "auto_done": "A milestone was posted; autonomous mode is off. Everyone waits for the {host}.",
         "default": "default", "account_default": "Account default",
         "efforts": {"": "default", "low": "low", "medium": "medium", "high": "high", "xhigh": "x-high",
                     "max": "max", "ultra": "ultra"},
@@ -203,6 +217,11 @@ T = {
         "lead_off": "{host}取消指派,大家回到只能看。",
         "proj_changed": "⚠️ 原專案 {project} 在會議期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
         "dismissed": "{host}請 {seat} 離席。",
+        "auto_on": "{host}開啟**自主會議**:不用等{host}回覆,請自行分工,把工作做完或做到告一段落。"
+                   "完成時由一位發一則開頭為「【階段成果】」的訊息,列出做了什麼、產出檔案、要{host}決定的事;"
+                   "之後所有人呼叫 wait_for_messages 等{host}。(防失控上限:連續 {n} 則)",
+        "auto_off": "{host}關閉自主會議,回到連講 {n} 則就等{host}。",
+        "auto_done": "已發出階段成果,自主會議自動關閉,大家等{host}回來看。",
         "default": "預設", "account_default": "帳號預設",
         "efforts": {"": "預設", "low": "低", "medium": "中", "high": "高", "xhigh": "更高", "max": "最高", "ultra": "極限"},
         "stale": "你的入席證已失效(這個席位已由新的程序接手)。請立即結束,不要再呼叫任何工具。",
@@ -1219,7 +1238,7 @@ def call_tool(name, a):
     closed = room.meta.get("closed", False)
     if name == "join_meeting":
         return {"title": room.meta["title"], "topic": room.meta["topic"], "you": seat, "closed": closed,
-                "rules": tx(room, "rules", n=AI_RUN_LIMIT), "messages": fmt(room, room.msgs),
+                "rules": tx(room, "rules", n=run_limit(room)), "messages": fmt(room, room.msgs),
                 "last_seq": len(room.msgs)}
     if name == "read_messages":
         after = int(a.get("after_seq", 0))
@@ -1227,8 +1246,8 @@ def call_tool(name, a):
     if name == "send_message":
         if closed:
             return {"ok": False, "reason": tx(room, "closed_no_speak")}
-        if room.ai_run() >= AI_RUN_LIMIT:
-            return {"ok": False, "reason": tx(room, "run_limit", n=AI_RUN_LIMIT)}
+        if room.ai_run() >= run_limit(room):
+            return {"ok": False, "reason": tx(room, "run_limit", n=run_limit(room))}
         text = (a.get("text") or "").strip()
         if not text:
             return {"ok": False, "reason": tx(room, "empty")}
@@ -1251,7 +1270,12 @@ def call_tool(name, a):
             shutil.copyfile(ip, os.path.join(room.dir, fn))
             imgs.append(fn)
             frames_later(room, fn)
-        return {"ok": True, "seq": room.add(seat, text, imgs)["seq"]}
+        seq = room.add(seat, text, imgs)["seq"]
+        if room.meta.get("auto") and text.startswith(DONE_MARK):
+            room.meta["auto"] = False
+            room.save_meta()
+            room.add("system", tx(room, "auto_done"))
+        return {"ok": True, "seq": seq}
     if name == "wait_for_messages":
         after = int(a.get("after_seq", 0))
         cap = 50 if seat == "Gemini" else WAIT_MAX
@@ -1268,7 +1292,7 @@ def call_tool(name, a):
             room.waiting[seat] = False
         new = room.msgs[after:]
         return {"messages": fmt(room, new), "last_seq": len(room.msgs), "closed": room.meta.get("closed", False),
-                "can_speak": room.ai_run() < AI_RUN_LIMIT, "hint": "" if new else tx(room, "no_new")}
+                "can_speak": room.ai_run() < run_limit(room), "hint": "" if new else tx(room, "no_new")}
     raise KeyError(f"no such tool: {name}")
 
 
@@ -1425,7 +1449,7 @@ class H(BaseHTTPRequestHandler):
                                     "seats": {s: r.state(s) for s in room_seats(r)},
                                     "usage": seat_usage(r),
                                     "labels": {s: seat_label(r, s) for s in room_seats(r)},
-                                    "ai_run": r.ai_run(), "ai_limit": AI_RUN_LIMIT})
+                                    "ai_run": r.ai_run(), "ai_limit": run_limit(r)})
         if parts[:1] == ["files"] and len(parts) == 3:
             if any(x in ("..", "") or "/" in x or "\\" in x for x in parts[1:]):
                 return self._send(404, {"error": "not found"})
@@ -1501,6 +1525,14 @@ class H(BaseHTTPRequestHandler):
                     if not r.meta.get("closed"):
                         close_room(r)
                     return self._send(200, {"ok": True})
+                if act == "auto":
+                    if r.meta.get("closed"):
+                        return self._send(400, {"error": tx(r, "closed_no_speak")})
+                    on = bool(b.get("on"))
+                    r.meta["auto"] = on
+                    r.save_meta()
+                    r.add("system", tx(r, "auto_on", n=AUTO_RUN_LIMIT) if on else tx(r, "auto_off", n=AI_RUN_LIMIT))
+                    return self._send(200, {"ok": True, "auto": on})
                 if act == "lead":
                     s = b.get("seat") or ""
                     if (s and s not in SEATS) or r.meta.get("closed"):

@@ -96,6 +96,7 @@ When a meeting starts, the hub launches each invited AI as a background process 
 |---|---|
 | Equal discussion (default) | Nobody edits the project or runs git writes. Each AI may run programs and write files in its own scratch folder (to make images or try ideas) and attach the results. |
 | Lead | Edits files and commits **only inside an isolated git worktree** (new branch `meeting/<time>`, stored outside your project, containing tracked files only — no `.env` or untracked secrets). The lead may run programs, scripts, tests and renders there. Codex is confined by its own `workspace-write` sandbox; Claude and `agy` have no write sandbox on native Windows, so pushes, remote logins, deletes, deploys and publishing are blocked by rules and the prompt (not by the OS). Push, deploy, deleting files or touching production must be asked in the meeting first. You can **assign or change the lead during the meeting** with the seat's *Operate* button; the copy is created on first assignment. While someone operates, the room checks the original project's `git status` every 20 s and posts a ⚠️ warning in the meeting if anything there changes. |
+| Autonomous mode | The *Autonomous mode* button at the top lets the AIs keep working without waiting for you (no 8-message pause; safety cap `auto_run_limit`). They split the work, and when it is done or reaches a milestone one of them posts a message starting with `[MILESTONE]` (what was done, output files, what you need to decide); that turns autonomous mode off automatically and everyone waits for you. Click the button again to stop it any time. |
 | Assistant | Same as equal discussion: no project edits, own scratch folder only, plus tasks the lead assigns. |
 
 Claude seats load only the project's shared settings (`--setting-sources project`), so your personal allow-lists never widen a seat's permissions. Mock-ups are posted as HTML inside the message; posted pages run in a sandbox and cannot act on the meeting room (they can load meeting attachments, which are served with `Access-Control-Allow-Origin: *` so a canvas can read their pixels). On native Windows the scratch-folder rule is enforced by rules and the prompt, not the OS, so the room checks the original project's `git status` every 20 s during every meeting and warns if anything changes. Merging the lead's branch back is your decision. The server binds to `127.0.0.1` only and rejects writes from other web pages. Seat logs (which contain whatever the AIs read) stay in the data folder and are never written into your project.
@@ -105,7 +106,7 @@ Claude seats load only the project's shared settings (`--setting-sources project
 ## Configuration
 
 Set environment variables, or put a `config.json` next to `hub.py` (ignored by git), e.g.
-`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`, `allowed_origins`, `image_max_mb`, `media_max_mb`. Environment variables win.
+`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`, `auto_run_limit`, `allowed_origins`, `image_max_mb`, `media_max_mb`. Environment variables win.
 
 Attachments: images and HTML pages up to `image_max_mb` (default 32), video/audio (mp4, webm, mov, mp3, m4a, wav) up to `media_max_mb` (default 1024). The host can attach files with the 📎 button, by dragging them onto the message box or by pasting; videos play in the page and can be seeked. When a meeting closes, video/audio stays in the meeting room's own folder and is not copied into your project. The AIs can see what you attach: each message gives them the file paths; they open images directly, and for videos the room extracts 12 evenly spaced key frames (with ffmpeg, if installed) plus the duration.
 
@@ -119,6 +120,7 @@ Attachments: images and HTML pages up to `image_max_mb` (default 32), video/audi
 | `MEETING_HOME` | `%LOCALAPPDATA%\ai-meeting-room` / `~/.local/share/ai-meeting-room` | live meetings, seat logs, lead worktrees |
 | `MEETING_EXPORT_DIR` | `docs/meetings` | where transcripts go, relative to the project |
 | `MEETING_AI_RUN_LIMIT` | `8` | AI messages in a row before they wait for you |
+| `MEETING_AUTO_RUN_LIMIT` | `120` | Safety cap while **Autonomous mode** is on |
 | `MEETING_HOST_NAME` | `主持人` | how the AIs address you in Chinese meetings |
 | `CLAUDE_BIN`, `CODEX_BIN`, `AGY_BIN` | auto | paths to the CLIs |
 

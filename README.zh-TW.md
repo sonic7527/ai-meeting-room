@@ -96,6 +96,7 @@ ln -s ~/ai-meeting-room/skills/開會 ~/.claude/skills/開會
 |---|---|
 | 平等討論(預設) | 大家都不能改專案、不能做 git 寫入;每位 AI 可以在自己的試做資料夾跑程式、寫檔(產圖、試做),成果附在發言上 |
 | 主審 | 改檔和提交**只在 git 獨立副本裡做**(新分支 `meeting/<時間>`,放在專案外,只有受 git 管理的檔案,沒有 `.env` 等未納管的機密檔)。主審可以在副本裡跑程式、腳本、測試、算圖。Codex 由它自己的沙盒限制寫入範圍;Claude 和 `agy` 在原生 Windows 上沒有寫入隔離,推送、連遠端主機、刪檔、部署、發佈是靠規則和提示擋(不是作業系統強制)。推送、部署、刪檔、動到正式環境一律要先在會議室問你。**會議中可以隨時用席位上的「指派操作」按鈕指定或換人**,第一次指派時才建立副本。有人在操作時,會議室每 20 秒比對一次原專案的 git 狀態,只要原專案有檔案被新增或修改,就在會議裡跳 ⚠️ 警告 |
+| 自主會議 | 按上方「自主會議」,AI 不用等你回覆、不受連講則數限制(只留防失控上限 `auto_run_limit`),自己分工做到完成或告一段落;完成時由一位發開頭為「【階段成果】」的訊息(做了什麼、產出檔案、要你決定的事),自主會議就自動關閉、大家等你回來看。隨時再按一次可停止 |
 | 輔助 | 跟平等討論一樣:不能改專案、只能寫自己的試做資料夾,加上做主審指派的工作 |
 
 Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人平常允許過的指令不會讓席位的權限變大。樣板是放在發言裡的網頁內容;嵌進對話的網頁在隔離框裡執行,動不了會議室(可以載入會議裡的附件,附件帶有 `Access-Control-Allow-Origin: *`,canvas 能讀像素)。原生 Windows 上「只寫自己的試做資料夾」是靠規則和提示約束、不是作業系統強制,所以每場會議期間,會議室都會每 20 秒比對一次原專案的 git 狀態,有變動就跳警告。主審的分支要不要合併回來,由你決定。伺服器只聽本機 `127.0.0.1`,也會擋掉其他網頁發來的寫入。AI 的執行紀錄(含它們讀過的檔案內容)只留在資料夾,不會寫進你的專案。
@@ -105,7 +106,7 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 ## 設定
 
 可以設環境變數,或在 `hub.py` 旁邊放一個 `config.json`(不會進 git),例如
-`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`allowed_origins`、`image_max_mb`、`media_max_mb`。兩者都有時以環境變數為準。
+`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`auto_run_limit`、`allowed_origins`、`image_max_mb`、`media_max_mb`。兩者都有時以環境變數為準。
 
 附件:圖片和網頁檔上限 `image_max_mb`(預設 32 MB),影片和音樂(mp4、webm、mov、mp3、m4a、wav)上限 `media_max_mb`(預設 1024 MB)。主持人可以按 📎、把檔案拖進發言欄,或直接貼上;影片在網頁裡直接播放、可以拖進度條。散會時影音檔留在會議室自己的資料夾,不會複製進你的專案。AI 看得到你貼的附件:每則訊息會附上檔案路徑,圖片它們直接打開看;影片則由會議室平均抽 12 張關鍵畫面(要裝 ffmpeg)加上影片長度給它們看。
 
@@ -119,6 +120,7 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 | `MEETING_HOME` | `%LOCALAPPDATA%\ai-meeting-room`/`~/.local/share/ai-meeting-room` | 進行中的會議、AI 執行紀錄、主審副本 |
 | `MEETING_EXPORT_DIR` | `docs/meetings` | 逐字稿存放位置(相對於專案) |
 | `MEETING_AI_RUN_LIMIT` | `8` | 你沒發言時 AI 最多連講幾則 |
+| `MEETING_AUTO_RUN_LIMIT` | `120` | 開啟**自主會議**時的防失控上限 |
 | `MEETING_HOST_NAME` | `主持人` | 中文會議裡 AI 怎麼稱呼你 |
 | `CLAUDE_BIN`、`CODEX_BIN`、`AGY_BIN` | 自動 | 三個命令列程式的路徑 |
 
