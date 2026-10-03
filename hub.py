@@ -94,6 +94,11 @@ T = {
         "resumed": "The meeting room restarted; {seat} rejoined.",
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "invited": "The {host} invited {seat} ({label}).",
+        "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in the isolated copy "
+                    "{path}; everyone else only reads.",
+        "lead_off": "The {host} cleared the assignment; everyone only reads again.",
+        "proj_changed": "⚠️ The original project {project} changed while {seat} is operating: {files}. If this was "
+                        "not you, check it with git and restore it.",
         "dismissed": "The {host} asked {seat} to leave.",
         "default": "default", "account_default": "Account default",
         "efforts": {"": "default", "low": "low", "medium": "medium", "high": "high", "xhigh": "x-high",
@@ -143,6 +148,9 @@ T = {
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
         "invited": "{host}邀請 {seat} 入席({label})。",
+        "lead_set": "{host}指派 {seat} 操作:可以在獨立副本 {path} 裡跑程式、改檔;其他人只能看。",
+        "lead_off": "{host}取消指派,大家回到只能看。",
+        "proj_changed": "⚠️ 原專案 {project} 在 {seat} 操作期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
         "dismissed": "{host}請 {seat} 離席。",
         "default": "預設", "account_default": "帳號預設",
         "efforts": {"": "預設", "low": "低", "medium": "中", "high": "高", "xhigh": "更高", "max": "最高", "ultra": "極限"},
@@ -556,6 +564,43 @@ def git(cwd, *args):
     return r.stdout.strip()
 
 
+GUARDS = set()
+GUARD_EVERY = 20
+
+
+def project_state(room):
+    top = git(room.meta.get("project") or DEFAULT_PROJECT, "rev-parse", "--show-toplevel")
+    out = git(top, "status", "--porcelain", "--untracked-files=all")
+    return top, {line for line in out.splitlines() if line.strip()}
+
+
+def guard_project(room):
+    if room.id in GUARDS:
+        return
+    GUARDS.add(room.id)
+
+    def run():
+        try:
+            top, seen = project_state(room)
+        except RuntimeError:
+            GUARDS.discard(room.id)
+            return
+        while room.meta.get("lead") and not room.meta.get("closed"):
+            time.sleep(GUARD_EVERY)
+            try:
+                _, now = project_state(room)
+            except RuntimeError:
+                continue
+            new = sorted(now - seen)
+            if new:
+                files = ", ".join(x.split(None, 1)[-1] for x in new[:10]) + (f" (+{len(new) - 10})" if len(new) > 10 else "")
+                room.add("system", tx(room, "proj_changed", project=top, seat=room.meta.get("lead"), files=files))
+            seen = now
+        GUARDS.discard(room.id)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def make_worktree(project, rid, lang):
     try:
         top = git(project, "rev-parse", "--show-toplevel")
@@ -577,10 +622,9 @@ def project_of(room):
     return p if os.path.isdir(p) else DEFAULT_PROJECT
 
 
-LEAD_BASH = ["git status", "git diff", "git log", "git show", "git blame", "git add", "git commit", "git restore",
-             "git mv", "git stash list", "python -m pyflakes", "python -m py_compile", "python3 -m py_compile",
-             "node --check"]
 READ_BASH = ["git status", "git diff", "git log", "git show", "git blame"]
+LEAD_DENY = ["git push", "git remote", "ssh", "scp", "sftp", "rsync", "rm", "rmdir", "del", "deploy.sh", "./deploy.sh",
+             "bash deploy.sh", "docker", "kubectl", "gh", "npm publish", "pip upload", "twine"]
 
 
 def bash_rules(cmds):
@@ -595,9 +639,11 @@ ROLE = {
         "lead": "The host made **you the lead**; {other} assists.\n"
                 "- You do **all code changes and git actions** for this meeting (edit files, git add/commit). "
                 "{other} cannot edit; anything hands-on is yours.\n"
-                "- You work in an **isolated copy**: {wt} (branch {branch}). Change only this copy, never the original "
-                "project {project}. Your commands are allow-listed (git without push, syntax checks). A refused command "
-                "means it is not allowed: ask the host in the meeting instead and never look for a workaround.\n"
+                "- You work in an **isolated copy**: {wt} (branch {branch}). Inside it you may run programs, scripts, "
+                "tests and renders and edit files freely; put scratch output in the copy or in {out}. Never write to the "
+                "original project {project}. Pushing, deploying, remote logins, deleting files and publishing are "
+                "blocked; a refused command means it is not allowed: ask the host in the meeting instead and never look "
+                "for a workaround.\n"
                 "- You may assign read-only work to {other} (research, reading code, checking your changes, finding "
                 "holes). Write \"@{other} please …\" with a clear scope and what to report back.\n"
                 "- Answer every point {other} raises: accept and change it, or explain why not.\n"
@@ -625,8 +671,9 @@ ROLE = {
                  "收斂時誰先發現誰寫【小結】。",
         "lead": "{host}指定**你是主審**、{other} 是輔助。\n"
                 "- 你負責這場會議的**所有程式修改與 git 動作**(改檔、git add/commit)。{other} 不能改檔,需要動手的事都由你做。\n"
-                "- 你在**獨立副本**裡工作:{wt}(分支 {branch})。只改這個副本,不要碰原專案資料夾 {project}。"
-                "能用的指令有白名單限制(git 不含 push、語法檢查);被拒絕的指令就是不准做,改成在會議室請{host}處理,不要找別的方法繞過。\n"
+                "- 你在**獨立副本**裡工作:{wt}(分支 {branch})。在副本裡可以自由跑程式、腳本、測試、算圖、改檔;"
+                "試做的輸出放在副本或 {out}。絕對不要寫到原專案資料夾 {project}。推送、部署、連遠端主機、刪檔、發佈都被擋;"
+                "被拒絕的指令就是不准做,改成在會議室請{host}處理,不要找別的方法繞過。\n"
                 "- 你可以指派 {other} 做唯讀的工作(查資料、讀程式、檢查你的改動、找漏洞),用「@{other} 請…」清楚交代範圍與要回報什麼。\n"
                 "- 認真回應 {other} 的每個意見:接受就改,不接受講理由。\n"
                 "- 動手前先在會議室說要改什麼、為什麼;改完貼出改了哪些檔、重點差異,請輔助檢查。\n"
@@ -650,7 +697,8 @@ def role_text(room, seat):
     lead = room.meta.get("lead") or ""
     other = others_of(room, seat) if lead == seat else lead
     kw = dict(other=other, seat=seat, host=tx(room, "host"), wt=room.meta.get("worktree"),
-              branch=room.meta.get("branch"), project=room.meta.get("project"))
+              branch=room.meta.get("branch"), project=room.meta.get("project"),
+              out=os.path.join(LOCAL, "seats", room.id, seat.lower()))
     r = R["equal"] if not lead else (R["lead"] if lead == seat else R["assist"])
     r = r.format(**kw)
     if room.meta.get("mode") == "review":
@@ -666,7 +714,8 @@ def seat_prompt(room, seat, ticket):
            "TITLE": room.meta["title"], "TOPIC": room.meta["topic"], "PROJECT": project_of(room),
            "MODE": tx(room, "modes")[room.meta.get("mode") or "discuss"], "ROLE": role_text(room, seat),
            "IMAGE": (tx(room, "img_note") if seat == "GPT" else tx(room, "no_img"))
-                    + (tx(room, "no_shell", seats=os.path.join(LOCAL, "seats", room.id)) if seat == "Gemini" else ""),
+                    + (tx(room, "no_shell", seats=os.path.join(LOCAL, "seats", room.id))
+                       if seat == "Gemini" and room.meta.get("lead") != "Gemini" else ""),
            "HOST": tx(room, "host"), "TICKET": ticket}
     for k, v in rep.items():
         tpl = tpl.replace("{{" + k + "}}", v)
@@ -674,6 +723,8 @@ def seat_prompt(room, seat, ticket):
 
 
 def start_seat(room, seat, restart=False):
+    if room.meta.get("lead") and not room.meta.get("closed"):
+        guard_project(room)
     p = room.procs.get(seat)
     if p is not None and p.poll() is None:
         if not restart:
@@ -723,6 +774,8 @@ def start_seat(room, seat, restart=False):
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
         mode = "accept-edits" if lead == "Gemini" else "plan"
         args = [exe, "--mode", mode, "--add-dir", project_of(room), "--add-dir", seat_dir]
+        if lead == "Gemini":
+            args.append("--dangerously-skip-permissions")
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
         if cfg.get("effort"):
@@ -741,8 +794,9 @@ def start_seat(room, seat, restart=False):
         if lead == "Claude":
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
                     "--permission-mode", "acceptEdits",
-                    "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write," + bash_rules(LEAD_BASH),
-                    "--disallowedTools", "NotebookEdit,WebFetch,WebSearch,Bash(git push:*),Bash(ssh:*),Bash(rm:*)"]
+                    "--add-dir", seat_dir,
+                    "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write,Bash",
+                    "--disallowedTools", "NotebookEdit,WebFetch,WebSearch,PowerShell," + bash_rules(LEAD_DENY)]
         else:
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
                     "--allowedTools", meet + ",Read,Grep,Glob," + bash_rules(READ_BASH),
@@ -1262,6 +1316,29 @@ class H(BaseHTTPRequestHandler):
                     if not r.meta.get("closed"):
                         close_room(r)
                     return self._send(200, {"ok": True})
+                if act == "lead":
+                    s = b.get("seat") or ""
+                    if (s and s not in SEATS) or r.meta.get("closed"):
+                        return self._send(400, {"error": "invalid seat or meeting closed"})
+                    if s and not r.meta.get("worktree"):
+                        try:
+                            r.meta["worktree"], r.meta["branch"], r.meta["git_common"] = make_worktree(
+                                r.meta.get("project") or DEFAULT_PROJECT, r.id, r.meta.get("lang") or DEFAULT_LANG)
+                        except RuntimeError as e:
+                            return self._send(400, {"error": str(e)})
+                    r.meta["lead"] = s
+                    r.save_meta()
+                    if s:
+                        guard_project(r)
+                    r.add("system", tx(r, "lead_set", seat=s, path=r.meta.get("worktree")) if s else tx(r, "lead_off"))
+                    for seat in room_seats(r):
+                        p = r.procs.get(seat)
+                        if p is not None and p.poll() is None:
+                            try:
+                                start_seat(r, seat, restart=True)
+                            except Exception as e:
+                                r.add("system", tx(r, "seat_fail", seat=seat, err=e))
+                    return self._send(200, {"ok": True, "lead": s})
                 if act == "invite":
                     s = b.get("seat")
                     if s not in SEATS or r.meta.get("closed"):

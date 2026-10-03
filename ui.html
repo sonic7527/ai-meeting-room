@@ -82,6 +82,8 @@ header h2{margin:0;font-size:24px;flex:1 1 260px;min-width:0}
 .body video{display:block;width:100%;max-height:640px;margin-top:10px;border-radius:10px;border:1px solid var(--hair);background:#000}
 .body audio{display:block;width:100%;margin-top:10px}
 #clip{flex:0 0 auto;padding:10px 12px;font-size:20px;line-height:1}
+.opbtn{padding:0 8px;font-size:13px;line-height:1.7;border-radius:99px;background:transparent;color:var(--ink-3);border:1px solid var(--hair)}
+.opbtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 #pending{display:flex;flex-wrap:wrap;gap:6px;padding:0 24px}
 #pending:empty{display:none}
 #pending span{display:inline-flex;align-items:center;gap:6px;font-size:14px;padding:3px 10px;border-radius:99px;border:1px solid var(--hair);background:var(--panel);color:var(--ink-2)}
@@ -197,7 +199,8 @@ const I18N={
    titleL:"Title",projL:"Project (every AI reads the same folder)",other:"Other folder…",otherPh:"Full path, e.g. /home/me/my-project",
    enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
    reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
-   attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",uploading:"Uploading",uploadFail:"Upload failed",
+   attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",
+   operate:"Operate",operating:"★ Operating",operateTip:"Let this AI run programs and edit files in an isolated copy of the project",operateOff:"Click to clear the assignment",uploading:"Uploading",uploadFail:"Upload failed",
    vetoText:"✕ Rejected. Revise it now.",adoptText:"✓ Adopted.",
    invite:"Invite",inviteGo:"Invite selected",inviteNote:"Tick the AIs to invite and pick their models. They join as soon as you confirm.",
    leave:"ask to leave",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
@@ -221,7 +224,8 @@ const I18N={
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
    enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
    reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
-   attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",uploading:"上傳中",uploadFail:"上傳失敗",
+   attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",
+   operate:"指派操作",operating:"★ 操作中",operateTip:"讓這位 AI 在專案的獨立副本裡跑程式、改檔",operateOff:"按一下取消指派",uploading:"上傳中",uploadFail:"上傳失敗",
    vetoText:"✕ 否決,請立刻改版。",adoptText:"✓ 採用。",
    invite:"邀請",inviteGo:"邀請入席",inviteNote:"勾選要邀請的 AI、選好模型,按下確認就入席。",
    leave:"請離席",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
@@ -329,6 +333,10 @@ function renderSeats(j){
   for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
     const i=document.createElement("i");const sm=document.createElement("small");sm.textContent=j.labels[s];
     el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+" "),sm);
+    if(!j.meta.closed){const isLead=(j.meta.lead||"")===s;const op=document.createElement("button");op.type="button";
+      op.className="opbtn"+(isLead?" on":"");op.textContent=isLead?L().operating:L().operate;op.title=isLead?L().operateOff:L().operateTip;
+      op.onclick=async()=>{op.disabled=true;try{await post(R(cur)+"/lead",{seat:isLead?"":s});await open(cur);}catch(e){$("note").textContent=e.message;op.disabled=false;}};
+      el.appendChild(op);}
     if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent="×";x.title=L().leave;x.setAttribute("aria-label",s+" "+L().leave);
       x.onclick=async()=>{x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
     box.appendChild(el);}
