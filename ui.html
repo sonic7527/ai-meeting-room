@@ -331,7 +331,8 @@ function refreshAcks(){
 function renderSeats(j){
   const box=$("seats");box.textContent="";
   for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
-    const i=document.createElement("i");const sm=document.createElement("small");sm.textContent=j.labels[s];
+    const i=document.createElement("i");const sm=document.createElement("small");const us=(j.usage||{})[s];
+    sm.textContent=j.labels[s]+(us?" · "+us.line:"");if(us){sm.title=us.tip;if(us.high)sm.style.color="var(--warn)";}
     el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+" "),sm);
     if(!j.meta.closed){const isLead=(j.meta.lead||"")===s;const op=document.createElement("button");op.type="button";
       op.className="opbtn"+(isLead?" on":"");op.textContent=isLead?L().operating:L().operate;op.title=isLead?L().operateOff:L().operateTip;

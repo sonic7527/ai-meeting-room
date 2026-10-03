@@ -140,6 +140,7 @@ T = {
         "seat_fail": "{seat} failed to start: {err}",
         "model_changed": "{seat} switched to {label} and rejoined.",
         "auto_back": "{seat} stopped unexpectedly ({why}) and was brought back automatically.",
+        "limit_hit": "{seat} hit its usage limit (resets: {when}); not bringing it back automatically. Click Bring back once it resets.",
         "resumed": "The meeting room restarted; {seat} rejoined.",
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "invited": "The {host} invited {seat} ({label}).",
@@ -194,6 +195,7 @@ T = {
         "seat_fail": "{seat} 啟動失敗:{err}",
         "model_changed": "{seat} 改用 {label},重新入席。",
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
+        "limit_hit": "{seat} 的用量已達上限(恢復時間:{when}),先不自動請回;恢復後按「請回席」。",
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
         "invited": "{host}邀請 {seat} 入席({label})。",
@@ -825,7 +827,7 @@ def start_seat(room, seat, restart=False):
         os.makedirs(os.path.join(work, ".agents"), exist_ok=True)
         with open(os.path.join(work, ".agents", "mcp_config.json"), "w", encoding="utf-8") as f:
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
-        args = [exe, "--mode", "accept-edits", "--dangerously-skip-permissions",
+        args = [exe, "--mode", "accept-edits", "--dangerously-skip-permissions", "--output-format", "stream-json",
                 "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
@@ -843,14 +845,14 @@ def start_seat(room, seat, restart=False):
         meet = ("mcp__meeting__join_meeting,mcp__meeting__send_message,"
                 "mcp__meeting__wait_for_messages,mcp__meeting__read_messages")
         if lead == "Claude":
-            args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
-                    "--permission-mode", "acceptEdits",
+            args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
+                    "--mcp-config", mcp_cfg, "--strict-mcp-config", "--permission-mode", "acceptEdits",
                     "--add-dir", seat_dir, "--add-dir", room.dir,
                     "--allowedTools", meet + ",Read,Grep,Glob,Edit,Write,Bash,WebFetch,WebSearch",
                     "--disallowedTools", "NotebookEdit,PowerShell," + bash_rules(LEAD_DENY)]
         else:
-            args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
-                    "--add-dir", room.dir, "--add-dir", project_of(room),
+            args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
+                    "--mcp-config", mcp_cfg, "--strict-mcp-config", "--add-dir", room.dir, "--add-dir", project_of(room),
                     "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch,Bash",
                     "--disallowedTools", "Edit,Write,NotebookEdit,PowerShell," + bash_rules(LEAD_DENY + GIT_WRITE)]
         if cfg.get("model"):
@@ -878,14 +880,131 @@ def start_seat(room, seat, restart=False):
 
 
 RESTARTS = {}
+USAGE_CACHE = {}
+LIMIT_RE = re.compile(r"(hit your usage limit|usage limit reached|rate_limit_error|RESOURCE_EXHAUSTED|"
+                      r"quota exceeded|exhausted your|\"status\":\"rejected\")", re.I)
+
+
+def _tail(path, n=262144):
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            f.seek(max(0, size - n))
+            return f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def _find_key(obj, key):
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    elif isinstance(obj, list):
+        for v in obj:
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    return None
+
+
+def _clock(ts):
+    try:
+        return datetime.fromtimestamp(float(ts)).strftime("%m/%d %H:%M")
+    except (TypeError, ValueError, OSError):
+        return "?"
+
+
+def usage_gpt():
+    root = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
+    files = sorted(glob.glob(os.path.join(root, "*", "*", "*", "rollout-*.jsonl")), key=os.path.getmtime, reverse=True)[:10]
+    for f in files:
+        for line in reversed(_tail(f).splitlines()):
+            if '"rate_limits"' not in line:
+                continue
+            try:
+                rl = _find_key(json.loads(line), "rate_limits")
+            except ValueError:
+                continue
+            if isinstance(rl, dict) and isinstance(rl.get("primary"), dict):
+                p, w = rl["primary"], rl.get("secondary") or {}
+                return {"5h": p.get("used_percent"), "5h_reset": p.get("resets_at"),
+                        "week": w.get("used_percent"), "week_reset": w.get("resets_at"), "at": os.path.getmtime(f)}
+    return None
+
+
+def usage_claude():
+    files = sorted(glob.glob(os.path.join(LOCAL, "seats", "*", "Claude.log")), key=os.path.getmtime, reverse=True)[:5]
+    for f in files:
+        for line in reversed(_tail(f).splitlines()):
+            if '"rate_limit_event"' not in line:
+                continue
+            try:
+                info = json.loads(line).get("rate_limit_info") or {}
+            except ValueError:
+                continue
+            uw = info.get("unifiedWindows") or {}
+            fh, sd = uw.get("five_hour") or {}, uw.get("seven_day") or {}
+            pct = lambda x: None if x is None else round(float(x) * 100)
+            return {"5h": pct(fh.get("utilization")), "5h_reset": fh.get("resetsAt"),
+                    "week": pct(sd.get("utilization")), "week_reset": sd.get("resetsAt"), "at": os.path.getmtime(f)}
+    return None
+
+
+def usage_gemini(room):
+    total = 0
+    for line in _tail(os.path.join(LOCAL, "seats", room.id, "Gemini.log"), 8 << 20).splitlines():
+        if '"step_type"' in line and '"usage"' in line:
+            try:
+                total += int((_find_key(json.loads(line), "usage") or {}).get("total_tokens") or 0)
+            except (ValueError, AttributeError):
+                pass
+    return {"tokens": total}
+
+
+def seat_usage(room):
+    key = room.id
+    hit = USAGE_CACHE.get(key)
+    if hit and time.time() - hit[0] < 30:
+        return hit[1]
+    zh = (room.meta.get("lang") or DEFAULT_LANG) == "zh-TW"
+    out = {}
+    for seat, fn in (("GPT", usage_gpt), ("Claude", usage_claude)):
+        try:
+            u = fn()
+        except Exception:
+            u = None
+        if u and u.get("5h") is not None:
+            line = (f"5 小時 {u['5h']:.0f}%・本週 {u['week'] or 0:.0f}%" if zh
+                    else f"5h {u['5h']:.0f}% · week {u['week'] or 0:.0f}%")
+            tip = (f"5 小時額度 {_clock(u['5h_reset'])} 恢復;本週額度 {_clock(u['week_reset'])} 恢復(帳號整體用量,{_clock(u['at'])} 更新)"
+                   if zh else f"5h window resets {_clock(u['5h_reset'])}; weekly resets {_clock(u['week_reset'])} "
+                              f"(whole account, updated {_clock(u['at'])})")
+            out[seat] = {"line": line, "tip": tip, "high": u["5h"] >= 80}
+    try:
+        g = usage_gemini(room)["tokens"]
+    except Exception:
+        g = 0
+    out["Gemini"] = {"line": (f"本場 {g / 10000:.1f} 萬 token" if zh else f"{g / 1000:.0f}k tokens this meeting"),
+                     "tip": ("Google 沒有提供剩餘額度,只能顯示這場會議用掉的量" if zh
+                             else "Google does not expose remaining quota; this is what this meeting used"), "high": False}
+    USAGE_CACHE[key] = (time.time(), out)
+    return out
 
 
 def _exit_reason(room, seat):
     try:
         with open(os.path.join(LOCAL, "seats", room.id, f"{seat}.log"), encoding="utf-8", errors="replace") as f:
-            tail = f.read()[-600:]
+            tail = f.read()[-6000:]
     except OSError:
         return "?"
+    if LIMIT_RE.search(tail):
+        when = re.search(r"try again at ([^.\n\"]+)", tail)
+        return "limit:" + (when.group(1).strip() if when else "")
     m = re.search(r'required the "([a-z_]+)" permission', tail)
     if m:
         return m.group(1) + " denied"
@@ -906,6 +1025,10 @@ def watchdog():
                 recent = [t for t in RESTARTS.get(key, []) if time.time() - t < 900]
                 why = _exit_reason(room, seat)
                 room.procs.pop(seat, None)
+                if why.startswith("limit:"):
+                    room.add("system", tx(room, "limit_hit", seat=seat, when=why[6:] or "?"))
+                    USAGE_CACHE.pop(room.id, None)
+                    continue
                 if len(recent) >= 3:
                     room.add("system", tx(room, "auto_gave_up", seat=seat, why=why))
                     RESTARTS[key] = recent
@@ -1300,6 +1423,7 @@ class H(BaseHTTPRequestHandler):
             meta = {k: v for k, v in r.meta.items() if k != "tickets"}
             return self._send(200, {"meta": meta, "messages": r.msgs[after:], "last_seq": len(r.msgs),
                                     "seats": {s: r.state(s) for s in room_seats(r)},
+                                    "usage": seat_usage(r),
                                     "labels": {s: seat_label(r, s) for s in room_seats(r)},
                                     "ai_run": r.ai_run(), "ai_limit": AI_RUN_LIMIT})
         if parts[:1] == ["files"] and len(parts) == 3:
