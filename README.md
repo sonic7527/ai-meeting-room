@@ -105,7 +105,9 @@ Claude seats load only the project's shared settings (`--setting-sources project
 ## Configuration
 
 Set environment variables, or put a `config.json` next to `hub.py` (ignored by git), e.g.
-`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`. Environment variables win.
+`{"lang": "zh-TW", "host_name": "站長"}` — keys: `host_name`, `lang`, `port`, `project`, `home`, `export_dir`, `ai_run_limit`, `allowed_origins`. Environment variables win.
+
+`allowed_origins` (env `MEETING_ALLOWED_ORIGINS`, comma-separated) lists extra page origins allowed to send actions, e.g. `["https://your-tunnel.example"]` when you reach the room from your phone through a tunnel. Only do this behind a tunnel that requires login: anyone who can open the page can run the meeting.
 
 | Variable | Default | Meaning |
 |---|---|---|

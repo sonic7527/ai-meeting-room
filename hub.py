@@ -29,6 +29,8 @@ def _load_local_config():
                      ("ai_run_limit", "MEETING_AI_RUN_LIMIT")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
+    if cfg.get("allowed_origins") and not os.environ.get("MEETING_ALLOWED_ORIGINS"):
+        os.environ["MEETING_ALLOWED_ORIGINS"] = ",".join(cfg["allowed_origins"])
 
 
 _load_local_config()
@@ -48,6 +50,7 @@ LOCAL = _data_home()
 DATA = os.path.join(LOCAL, "rooms")
 EXPORT_SUBDIR = os.environ.get("MEETING_EXPORT_DIR", os.path.join("docs", "meetings"))
 PORT = int(os.environ.get("MEETING_PORT", "7720"))
+ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in os.environ.get("MEETING_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 DEFAULT_LANG = os.environ.get("MEETING_LANG", "en")
 SEATS = ("Claude", "GPT", "Gemini")
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
@@ -1072,7 +1075,7 @@ class H(BaseHTTPRequestHandler):
 
     def _local_origin(self):
         org = self.headers.get("Origin")
-        return org is None or org in (f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}")
+        return org is None or org in (f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}") or org in ALLOWED_ORIGINS
 
     def do_GET(self):
         u = urlparse(self.path)

@@ -105,7 +105,9 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 ## 設定
 
 可以設環境變數,或在 `hub.py` 旁邊放一個 `config.json`(不會進 git),例如
-`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`。兩者都有時以環境變數為準。
+`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`allowed_origins`。兩者都有時以環境變數為準。
+
+`allowed_origins`(環境變數 `MEETING_ALLOWED_ORIGINS`,逗號分隔)列出可以送出操作的額外網頁來源,例如透過通道用手機進會議室時填 `["https://你的通道網址"]`。只能用在需要登入的通道後面:打得開這個網頁的人就能操作會議。
 
 | 環境變數 | 預設 | 意思 |
 |---|---|---|
