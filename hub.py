@@ -146,8 +146,8 @@ T = {
         "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in the isolated copy "
                     "{path}; everyone else only reads.",
         "lead_off": "The {host} cleared the assignment; everyone only reads again.",
-        "proj_changed": "⚠️ The original project {project} changed while {seat} is operating: {files}. If this was "
-                        "not you, check it with git and restore it.",
+        "proj_changed": "⚠️ The original project {project} changed during the meeting: {files}. If this was not you, "
+                        "check it with git and restore it.",
         "dismissed": "The {host} asked {seat} to leave.",
         "default": "default", "account_default": "Account default",
         "efforts": {"": "default", "low": "low", "medium": "medium", "high": "high", "xhigh": "x-high",
@@ -172,15 +172,15 @@ T = {
                        "media": "video/audio stays in the meeting room folder, not copied here"},
         "img_note": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no "
                     "external URLs) in the `html` field of send_message; the room shows it inline and interactive. You "
-                    "can also make images with your built-in image tool and pass the file path as attach_path. Never "
-                    "ask the host to open a URL and never start a web server.",
+                    "can also make images with your built-in image tool or with programs in your scratch folder and pass "
+                    "the file path as attach_path. A page may load earlier attachments by file name; to read their pixels in "
+                    "a canvas set img.crossOrigin=\"anonymous\". Never ask the host to open a URL and never start a web "
+                    "server.",
         "no_img": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no external "
-                  "URLs) in the `html` field of send_message; the room shows it inline and interactive. You do not need "
-                  "to write any file. Never ask the host to open a URL.",
-        "no_shell": "\n- 🔴 **You may only read. Never write or edit any file, never run terminal / shell commands, and "
-                    "read files only inside the project folder or the meeting folder {seats}** (where the other AIs keep "
-                    "their files). Anything else is refused in background mode and throws you out of the meeting. "
-                    "Mock-ups go in the `html` field of send_message instead of a file.",
+                  "URLs) in the `html` field of send_message; the room shows it inline and interactive. You can also make "
+                  "image files with programs in your scratch folder and pass the path as attach_path. A page may load "
+                  "earlier attachments by file name; to read their pixels in a canvas set img.crossOrigin=\"anonymous\". "
+                  "Never ask the host to open a URL.",
     },
     "zh-TW": {
         "host": os.environ.get("MEETING_HOST_NAME", "主持人"), "system": "系統",
@@ -199,7 +199,7 @@ T = {
         "invited": "{host}邀請 {seat} 入席({label})。",
         "lead_set": "{host}指派 {seat} 操作:可以在獨立副本 {path} 裡跑程式、改檔;其他人只能看。",
         "lead_off": "{host}取消指派,大家回到只能看。",
-        "proj_changed": "⚠️ 原專案 {project} 在 {seat} 操作期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
+        "proj_changed": "⚠️ 原專案 {project} 在會議期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
         "dismissed": "{host}請 {seat} 離席。",
         "default": "預設", "account_default": "帳號預設",
         "efforts": {"": "預設", "low": "低", "medium": "中", "high": "高", "xhigh": "更高", "max": "最高", "ultra": "極限"},
@@ -220,12 +220,12 @@ T = {
                        "worktree": "主審副本", "merge": "合併與否由主持人決定", "topic": "議題", "log": "逐字稿",
                        "dropped": "未保留:沒有採用", "media": "影音檔留在會議室資料夾,不複製到專案"},
         "img_note": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
-                    "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能出圖,把檔案路徑放進 attach_path。"
-                    "不要叫{host}開網址,也不要自己架伺服器。",
+                    "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能,或在自己的試做資料夾用程式出圖,"
+                    "把檔案路徑放進 attach_path。網頁可以用檔名載入之前的附件;要在 canvas 讀它們的像素,記得設 "
+                    "img.crossOrigin=\"anonymous\"。不要叫{host}開網址,也不要自己架伺服器。",
         "no_img": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
-                  "html 欄位,會議室會直接嵌在你的發言下面、可以操作。不需要寫任何檔案,也不要叫{host}開網址。",
-        "no_shell": "\n- 🔴 **你只能讀:絕對不要寫檔或改檔、不要執行任何終端機指令;讀檔只限專案資料夾與會議資料夾 {seats}**"
-                    "(其他 AI 的檔案放在這裡)。做了以上任何一件,背景模式會拒絕並把你踢出會議。樣板請放在 send_message 的 html 欄位,不要寫檔。",
+                  "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以在自己的試做資料夾用程式產生圖檔,把路徑放進 attach_path。"
+                  "網頁可以用檔名載入之前的附件;要在 canvas 讀它們的像素,記得設 img.crossOrigin=\"anonymous\"。不要叫{host}開網址。",
     },
 }
 
@@ -636,7 +636,7 @@ def guard_project(room):
         except RuntimeError:
             GUARDS.discard(room.id)
             return
-        while room.meta.get("lead") and not room.meta.get("closed"):
+        while not room.meta.get("closed"):
             time.sleep(GUARD_EVERY)
             try:
                 _, now = project_state(room)
@@ -645,7 +645,7 @@ def guard_project(room):
             new = sorted(now - seen)
             if new:
                 files = ", ".join(x.split(None, 1)[-1] for x in new[:10]) + (f" (+{len(new) - 10})" if len(new) > 10 else "")
-                room.add("system", tx(room, "proj_changed", project=top, seat=room.meta.get("lead"), files=files))
+                room.add("system", tx(room, "proj_changed", project=top, files=files))
             seen = now
         GUARDS.discard(room.id)
 
@@ -673,7 +673,9 @@ def project_of(room):
     return p if os.path.isdir(p) else DEFAULT_PROJECT
 
 
-READ_BASH = ["git status", "git diff", "git log", "git show", "git blame"]
+GIT_WRITE = ["git add", "git commit", "git reset", "git checkout", "git restore", "git rm", "git mv", "git stash",
+             "git merge", "git rebase", "git cherry-pick", "git tag", "git branch", "git switch", "git apply", "git clean",
+             "git worktree", "git config"]
 LEAD_DENY = ["git push", "git remote", "ssh", "scp", "sftp", "rsync", "rm", "rmdir", "del", "deploy.sh", "./deploy.sh",
              "bash deploy.sh", "docker", "kubectl", "gh", "npm publish", "pip upload", "twine"]
 
@@ -684,8 +686,9 @@ def bash_rules(cmds):
 
 ROLE = {
     "en": {
-        "equal": "This is an equal discussion with no lead. Everyone may only read files and use read-only "
-                 "commands. **Do not modify any file and do not run any git write command.** "
+        "equal": "This is an equal discussion with no lead. **Nobody edits the project: do not modify project files "
+                 "and do not run any git write command.** You may run programs and scripts and write files only in your "
+                 "own scratch folder {out} (to make images or try ideas) and attach results with attach_path. "
                  "Whoever notices the discussion has converged writes the [SUMMARY].",
         "lead": "The host made **you the lead**; {other} assists.\n"
                 "- You do **all code changes and git actions** for this meeting (edit files, git add/commit). "
@@ -705,8 +708,8 @@ ROLE = {
                 "- Follow the project's own rules (CLAUDE.md / AGENTS.md), e.g. commit message format, banned commands.\n"
                 "- Finish with a [SUMMARY] for the host: what you did, verification, what is left, what the host must decide.",
         "assist": "The host made **{other} the lead**; you assist.\n"
-                  "- You **may not modify any file or run any git write command**; only read files and use read-only "
-                  "commands (git status/diff/log/show/blame).\n"
+                  "- You **may not modify project files or run any git write command**; you may read files, use "
+                  "read-only commands, and run programs that write only into your own scratch folder {out}.\n"
                   "- Your job: give your own view on {other}'s plan and changes, find holes, verify facts, raise risks "
                   "and alternatives.\n"
                   "- Do the work {other} assigns to you (\"@{seat} please …\") and report the result in the meeting; "
@@ -718,7 +721,8 @@ ROLE = {
                   "and what would go wrong; the author answers each (real issue / not an issue + why).",
     },
     "zh-TW": {
-        "equal": "這場是平等討論,沒有主審。大家都只能讀檔與用唯讀指令查證,**不能修改任何檔案、不能做 git 寫入動作**。"
+        "equal": "這場是平等討論,沒有主審。**大家都不能改專案:不要修改專案裡的檔案、不要做 git 寫入動作。**"
+                 "可以在自己的試做資料夾 {out} 裡跑程式、腳本、寫檔(例如產圖、試做),成果用 attach_path 附上。"
                  "收斂時誰先發現誰寫【小結】。",
         "lead": "{host}指定**你是主審**、{other} 是輔助。\n"
                 "- 你負責這場會議的**所有程式修改與 git 動作**(改檔、git add/commit)。{other} 不能改檔,需要動手的事都由你做。\n"
@@ -732,7 +736,7 @@ ROLE = {
                 "- 嚴格遵守專案說明檔(CLAUDE.md/AGENTS.md)裡的規則,例如提交訊息格式、禁止的指令。\n"
                 "- 最後寫【小結】交給{host}:做了什麼、驗證結果、還沒做的、需要{host}決定的。",
         "assist": "{host}指定 **{other} 是主審**、你是輔助。\n"
-                  "- 你**不能修改任何檔案、不能做 git 寫入動作**;只能讀檔、用唯讀指令查證(git status/diff/log/show/blame)。\n"
+                  "- 你**不能修改專案裡的檔案、不能做 git 寫入動作**;可以讀檔、用唯讀指令查證,也可以跑程式,但只能寫到自己的試做資料夾 {out}。\n"
                   "- 你的工作:對 {other} 的方案與改動提出自己的意見,找漏洞、查證事實、提出風險與替代做法。\n"
                   "- {other} 指派給你的工作(「@{seat} 請…」)要照做,做完把結果回報在會議室;超出唯讀範圍的請 {other} 自己做。\n"
                   "- 需要動手改的地方,寫清楚檔名、行號、建議怎麼改,交給 {other} 執行。【小結】由 {other} 寫。",
@@ -764,9 +768,7 @@ def seat_prompt(room, seat, ticket):
     rep = {"SEAT": seat, "OTHER": others_of(room, seat), "ROOM": room.id,
            "TITLE": room.meta["title"], "TOPIC": room.meta["topic"], "PROJECT": project_of(room),
            "MODE": tx(room, "modes")[room.meta.get("mode") or "discuss"], "ROLE": role_text(room, seat),
-           "IMAGE": (tx(room, "img_note") if seat == "GPT" else tx(room, "no_img"))
-                    + (tx(room, "no_shell", seats=os.path.join(LOCAL, "seats", room.id))
-                       if seat == "Gemini" and room.meta.get("lead") != "Gemini" else ""),
+           "IMAGE": tx(room, "img_note") if seat == "GPT" else tx(room, "no_img"),
            "HOST": tx(room, "host"), "TICKET": ticket}
     for k, v in rep.items():
         tpl = tpl.replace("{{" + k + "}}", v)
@@ -774,7 +776,7 @@ def seat_prompt(room, seat, ticket):
 
 
 def start_seat(room, seat, restart=False):
-    if room.meta.get("lead") and not room.meta.get("closed"):
+    if not room.meta.get("closed"):
         guard_project(room)
     p = room.procs.get(seat)
     if p is not None and p.poll() is None:
@@ -823,10 +825,8 @@ def start_seat(room, seat, restart=False):
         os.makedirs(os.path.join(work, ".agents"), exist_ok=True)
         with open(os.path.join(work, ".agents", "mcp_config.json"), "w", encoding="utf-8") as f:
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
-        mode = "accept-edits" if lead == "Gemini" else "plan"
-        args = [exe, "--mode", mode, "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
-        if lead == "Gemini":
-            args.append("--dangerously-skip-permissions")
+        args = [exe, "--mode", "accept-edits", "--dangerously-skip-permissions",
+                "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
         if cfg.get("effort"):
@@ -850,14 +850,18 @@ def start_seat(room, seat, restart=False):
                     "--disallowedTools", "NotebookEdit,PowerShell," + bash_rules(LEAD_DENY)]
         else:
             args = [exe, "-p", "--setting-sources", "project", "--mcp-config", mcp_cfg, "--strict-mcp-config",
-                    "--add-dir", room.dir,
-                    "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch," + bash_rules(READ_BASH),
-                    "--disallowedTools", "Edit,Write,NotebookEdit"]
+                    "--add-dir", room.dir, "--add-dir", project_of(room),
+                    "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch,Bash",
+                    "--disallowedTools", "Edit,Write,NotebookEdit,PowerShell," + bash_rules(LEAD_DENY + GIT_WRITE)]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
         if cfg.get("effort"):
             args += ["--effort", cfg["effort"]]
-        cwd = project_of(room)
+        if lead == "Claude":
+            cwd = project_of(room)
+        else:
+            cwd = os.path.join(seat_dir, "claude")
+            os.makedirs(cwd, exist_ok=True)
         env["MCP_TOOL_TIMEOUT"] = "300000"
     room.meta.setdefault("tickets", {})[seat] = ticket
     room.save_meta()
@@ -1216,6 +1220,7 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(end - start + 1))
         self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         try:
             with open(path, "rb") as f:
@@ -1312,7 +1317,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, data, "text/html; charset=utf-8",
                                   headers={"Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals",
                                            "X-Content-Type-Options": "nosniff"})
-            return self._send(200, data, "image/jpeg" if ext in (".jpg", ".jpeg") else f"image/{ext[1:]}")
+            return self._send(200, data, "image/jpeg" if ext in (".jpg", ".jpeg") else f"image/{ext[1:]}",
+                              headers={"Access-Control-Allow-Origin": "*"})
         return self._send(404, {"error": "not found"})
 
     def do_DELETE(self):
