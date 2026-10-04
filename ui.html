@@ -129,8 +129,33 @@ fieldset .hint{font-size:14px;color:var(--ink-3);margin:6px 0 0}
 fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4px}
 .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
 .err{color:var(--danger);min-height:1.5em;margin-top:8px}
-@media (max-width:820px){body{flex-direction:column}aside{width:auto;flex:0 0 auto;max-height:34vh;border-right:0;border-bottom:1px solid var(--hair)}
-  header,.topic,.log,footer,.note,.info{padding-left:16px;padding-right:16px}.two{grid-template-columns:minmax(0,1fr)}}
+.mob{display:none;background:transparent;color:var(--ink-2);border:1px solid var(--hair);padding:4px 12px;font-size:18px;line-height:1.4}
+@media (max-width:820px){
+  html,body{height:100dvh}
+  body{flex-direction:column;font-size:16px;line-height:1.6}
+  aside{display:none}
+  body.nav aside{display:flex;position:fixed;top:0;left:0;right:0;max-height:75dvh;width:auto;z-index:40;border-right:0;
+    border-bottom:1px solid var(--hair);box-shadow:0 10px 30px rgba(0,0,0,.45)}
+  .mob{display:inline-block}
+  header{padding:8px 12px;gap:6px 8px}
+  header h2{font-size:17px;flex:1 1 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .seats{order:3;flex:1 0 100%;flex-wrap:nowrap;overflow-x:auto;gap:6px}
+  .seat{font-size:14px;padding:2px 10px;white-space:nowrap;flex:0 0 auto}
+  body:not(.more) .seat small,body:not(.more) .seat .opbtn,body:not(.more) .seat .leave{display:none}
+  body:not(.more) header>button:not(.mob),body:not(.more) .info,body:not(.more) .topic{display:none}
+  header>button:not(.mob){order:4;padding:6px 12px;font-size:15px}
+  .info,.topic,.log,footer,.note,#pending,#replybar{padding-left:12px;padding-right:12px}
+  .log{padding-top:12px;gap:12px;min-height:0}
+  .body{padding:9px 12px}
+  .who{font-size:15px}
+  .note{display:none}
+  footer{padding-top:8px;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  footer textarea{min-height:44px;max-height:30dvh;padding:8px 10px}
+  footer .primary{padding:10px 14px}
+  .body img{max-height:60dvh}
+  .page iframe{height:60dvh}
+  .two{grid-template-columns:minmax(0,1fr)}}
+@media (hover:none){.msgacts{opacity:1}}
 </style></head><body>
 <aside>
   <div class="top">
@@ -142,7 +167,9 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
 </aside>
 <main>
   <header>
+    <button type="button" class="mob" id="navBtn">☰</button>
     <h2 id="title" data-t="pick"></h2>
+    <button type="button" class="mob" id="moreBtn">⋯</button>
     <div class="seats" id="seats"></div>
     <button class="primary" id="inviteBtn" hidden data-t="invite"></button>
     <button class="ghost" id="cfgBtn" hidden data-t="models"></button>
@@ -306,13 +333,13 @@ function add(m){
       const bar=document.createElement("div");bar.className="pagebar";const nm=document.createElement("span");nm.textContent=f;
       const big=document.createElement("button");big.type="button";big.className="ghost";big.textContent=L().enlarge;
       const tab=document.createElement("a");tab.href=src;tab.target="_blank";tab.rel="noopener";tab.textContent=L().newTab;
-      const fr=document.createElement("iframe");fr.src=src;fr.title=f;
+      const fr=document.createElement("iframe");fr.loading="lazy";fr.src=src;fr.title=f;
       big.onclick=()=>{box.classList.toggle("full");big.textContent=box.classList.contains("full")?L().shrink:L().enlarge;};
       bar.append(nm,big,tab);box.append(bar,fr);body.appendChild(box);}
-    else if(/\.(mp4|webm|mov)$/i.test(f)){const v=document.createElement("video");v.src=src;v.controls=true;v.preload="metadata";v.playsInline=true;body.appendChild(v);}
-    else if(/\.(mp3|m4a|wav)$/i.test(f)){const au=document.createElement("audio");au.src=src;au.controls=true;au.preload="metadata";body.appendChild(au);}
+    else if(/\.(mp4|webm|mov)$/i.test(f)){const v=document.createElement("video");v.src=src;v.controls=true;v.preload="none";v.playsInline=true;body.appendChild(v);}
+    else if(/\.(mp3|m4a|wav)$/i.test(f)){const au=document.createElement("audio");au.src=src;au.controls=true;au.preload="none";body.appendChild(au);}
     else{const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
-      const im=document.createElement("img");im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}}
+      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}}
   const q=/^↩ #(\d+) ([^：\n]+)：([^\n]*)\n?/.exec(m.text);
   if(q){body.textContent=m.text.slice(q[0].length);const qt=document.createElement("div");qt.className="quote";qt.textContent=q[2]+"："+q[3];
     qt.onclick=()=>{const t=document.querySelector('.msg[data-seq="'+q[1]+'"]');if(t){t.scrollIntoView({behavior:"smooth",block:"center"});t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1200);}};
@@ -423,6 +450,9 @@ document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").h
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("ctx").hidden=true;}});
 $("send").onclick=send;
 $("clip").title=L().attach;$("clip").onclick=()=>$("pick").click();
+$("navBtn").onclick=()=>document.body.classList.toggle("nav");
+$("moreBtn").onclick=()=>document.body.classList.toggle("more");
+$("list").addEventListener("click",e=>{if(e.target.closest(".item"))document.body.classList.remove("nav");});
 $("pick").onchange=()=>{uploadFiles([...$("pick").files]);$("pick").value="";};
 for(const ev of["dragenter","dragover"])document.querySelector("footer").addEventListener(ev,e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes("Files")){e.preventDefault();e.currentTarget.classList.add("drop");}});
 document.querySelector("footer").addEventListener("dragleave",e=>e.currentTarget.classList.remove("drop"));
