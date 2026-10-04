@@ -16,6 +16,7 @@
 - **Self-healing.** An AI that stops unexpectedly is brought back automatically; after a restart, open meetings get their AIs back.
 - **Transcripts saved into your project** (`docs/meetings/<date>_<title>/transcript.md`) when you close the meeting.
 - **Only adopted attachments are kept**: mock-ups and images you marked ✓ plus the last one nobody rejected are copied out; everything else (including ✕ rejected versions) is left out and marked in the transcript, so the folder stays small.
+- **Clean-up after a conclusion**: the `開會` skill tells Claude, once a meeting has reached a conclusion, to move what the final work actually uses (source images, scripts, approved designs) into the project, check it can be rebuilt, then send the meeting's `rooms/<id>` and `seats/<id>` folders (draft images, trial videos, AI logs) to the recycle bin and drop superseded files from the export folder.
 - English and Traditional Chinese UI and meeting language.
 - One Python file, standard library only. Runs on `127.0.0.1` only.
 
