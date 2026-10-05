@@ -436,7 +436,8 @@ def archive_messages(a):
 
 
 def _ver(p):
-    v = os.path.basename(os.path.dirname(p))
+    parts = os.path.normpath(os.path.dirname(p)).split(os.sep)
+    v = next((x for x in reversed(parts) if re.fullmatch(r"\d+(\.\d+)+", x)), parts[-1])
     return tuple(int(x) if x.isdigit() else 0 for x in v.split("."))
 
 
@@ -462,9 +463,11 @@ def find_claude():
     if w:
         return w
     if IS_WIN:
-        c = glob.glob(os.path.join(os.environ.get("APPDATA", ""), "Claude", "claude-code", "*", "claude.exe"))
+        base = os.path.join(os.environ.get("APPDATA", ""), "Claude", "claude-code")
+        c = glob.glob(os.path.join(base, "*", "claude.exe")) + glob.glob(os.path.join(base, "*", "*", "claude.exe"))
     else:
-        c = glob.glob(os.path.expanduser("~/Library/Application Support/Claude/claude-code/*/claude")) + \
+        base = os.path.expanduser("~/Library/Application Support/Claude/claude-code")
+        c = glob.glob(os.path.join(base, "*", "claude")) + glob.glob(os.path.join(base, "*", "*", "claude")) + \
             glob.glob(os.path.expanduser("~/.claude/local/claude"))
     return max(c, key=_ver) if c else None
 
