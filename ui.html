@@ -304,7 +304,7 @@ const $=id=>document.getElementById(id);
 let LANG=(navigator.language||"").startsWith("zh")?"zh-TW":"en";
 try{const saved=localStorage.getItem("amr-lang");if(saved in I18N)LANG=saved;}catch(e){}
 const L=()=>I18N[LANG];
-let cur=null,last=0,timer=null,closed=false,MODELS=null,AGENTS=null,curMeta=null,curSeats=[];
+let cur=null,last=0,timer=null,closed=false,MODELS=null,AGENTS=null,curMeta=null,curSeats=[],curState={};
 const SEQS={};
 
 function applyLang(){
@@ -410,7 +410,7 @@ async function poll(){
     const j=await api(R(room)+"/messages?after="+last);
     if(room!==cur)return;
     const log=$("log");const atBottom=log.scrollHeight-log.scrollTop-log.clientHeight<80;
-    curMeta=j.meta;curSeats=Object.keys(j.seats);for(const s of curSeats)SEQS[s]=SEQS[s]||[];
+    curMeta=j.meta;curSeats=Object.keys(j.seats);curState=j.seats;for(const s of curSeats)SEQS[s]=SEQS[s]||[];
     const fresh=j.messages.filter(m=>m.seq>last);fresh.forEach(add);last=Math.max(last,j.last_seq);refreshAcks();
     if(fresh.length&&atBottom)log.scrollTop=log.scrollHeight;
     if(j.meta.archive)clearInterval(timer);
@@ -571,7 +571,7 @@ $("form").addEventListener("submit",async e=>{e.preventDefault();
 });
 $("inviteBtn").onclick=async()=>{$("i-err").textContent="";
   try{[MODELS,AGENTS]=await Promise.all([api("/api/models"),api("/api/agents")]);const box=$("invSeats");box.textContent="";
-    const free=ALL.filter(s=>!curSeats.includes(s));
+    const free=ALL.filter(s=>!curSeats.includes(s)||curState[s]==="away");
     if(!free.length){const p=document.createElement("p");p.className="hint";p.textContent=L().allSeated;box.appendChild(p);}
     for(const s of free)box.appendChild(seatPicker(s,(MODELS.last||{})[s]||{},true,AGENTS[s]));}catch(e){$("i-err").textContent=e.message;}
   $("dlg3").showModal();};
