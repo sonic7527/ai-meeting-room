@@ -325,9 +325,14 @@ function hm(iso){try{return new Date(iso).toLocaleTimeString(LANG,{hour:"2-digit
 function opt(sel,items,val){sel.textContent="";for(const[v,t]of items){const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);}sel.value=val;if(sel.value!==val&&sel.options.length)sel.selectedIndex=0;}
 const R=id=>"/api/rooms/"+encodeURIComponent(id);
 
+let listSig="";
 async function loadList(){
   let rows=[];try{rows=await api("/api/rooms");}catch(e){$("note").textContent=L().noServer+e.message;return;}
-  const box=$("list");box.textContent="";
+  let arcs=[];try{arcs=await api("/api/archives");}catch(e){}
+  const list=$("list");
+  if(list.querySelector('.del[data-arm="1"]'))return;
+  const sig=JSON.stringify([cur,LANG,rows,arcs]);if(sig===listSig)return;listSig=sig;
+  const box=document.createDocumentFragment();
   if(!rows.length){const d=document.createElement("div");d.className="empty";d.style.padding="20px";d.textContent=L().none;box.appendChild(d);}
   for(const r of rows){const row=document.createElement("div");row.className="itemrow";
     const b=document.createElement("button");b.className="item"+(r.id===cur?" on":"")+(r.closed?" closed":"");b.textContent=r.title;
@@ -337,13 +342,13 @@ async function loadList(){
     d.onclick=async()=>{if(d.dataset.arm!=="1"){d.dataset.arm="1";d.textContent=L().delSure;setTimeout(()=>{d.dataset.arm="";d.textContent=L().del;},4000);return;}
       try{const res=await post(R(r.id)+"/delete");if(r.id===cur){cur=null;clearInterval(timer);$("log").textContent="";$("title").textContent=L().pick;$("brief").hidden=true;$("seats").textContent="";
         ["inviteBtn","cfgBtn","recall","closeBtn","autoBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
-        $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;loadList();}catch(e){$("note").textContent=e.message;}};
+        $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;listSig="";loadList();}catch(e){$("note").textContent=e.message;}};
     row.append(b,d);box.appendChild(row);}
-  let arcs=[];try{arcs=await api("/api/archives");}catch(e){}
   if(arcs.length){const h=document.createElement("div");h.className="arch";h.textContent=L().archived;box.appendChild(h);}
   for(const r of arcs){const b=document.createElement("button");b.className="item closed"+(r.id===cur?" on":"");b.textContent=r.title;
     const s=document.createElement("small");s.textContent=L().meetings.saved+" · "+r.created.slice(5,16).replace("T"," ")+" · "+r.count+L().meetings.msgs;
     b.appendChild(s);b.onclick=()=>open(r.id);box.appendChild(b);}
+  const top=list.scrollTop;list.replaceChildren(box);list.scrollTop=top;
 }
 
 function whoName(w){return w==="user"?L().host:w==="system"?L().system:w;}
