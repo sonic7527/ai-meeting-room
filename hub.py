@@ -979,6 +979,7 @@ def start_seat(room, seat, restart=False):
 RESTARTS = {}
 USAGE_CACHE = {}
 LIMIT_BACK = {}
+TURN_ENDS = {}
 LIMIT_RETRY = 1800
 LIMIT_RE = re.compile(r"(hit your usage limit|usage limit reached|rate_limit_error|RESOURCE_EXHAUSTED|"
                       r"quota exceeded|exhausted your|\"status\":\"rejected\")", re.I)
@@ -1112,6 +1113,10 @@ def _exit_reason(room, seat):
     m = re.search(r'required the "([a-z_]+)" permission', tail)
     if m:
         return m.group(1) + " denied"
+    last = next((x for x in reversed(tail.splitlines()) if x.strip()), "")
+    if ('"event":"result"' in last and '"status":"SUCCESS"' in last) or \
+            ('"type":"result"' in last and '"subtype":"success"' in last):
+        return "done"
     return "exited"
 
 
@@ -1154,6 +1159,15 @@ def watchdog():
                                           back=time.strftime("%H:%M", time.localtime(LIMIT_BACK[key]))))
                     USAGE_CACHE.pop(room.id, None)
                     continue
+                if why == "done":
+                    turns = [t for t in TURN_ENDS.get(key, []) if time.time() - t < 900]
+                    if len(turns) < 30:
+                        TURN_ENDS[key] = turns + [time.time()]
+                        try:
+                            start_seat(room, seat)
+                        except Exception as e:
+                            room.add("system", tx(room, "seat_fail", seat=seat, err=e))
+                        continue
                 if len(recent) >= 3:
                     room.add("system", tx(room, "auto_gave_up", seat=seat, why=why))
                     RESTARTS[key] = recent
