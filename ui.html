@@ -46,7 +46,8 @@ aside h1{margin:0;font-size:23px;letter-spacing:.03em}
 main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
 header{padding:14px 24px;border-bottom:1px solid var(--hair);display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
 header h2{margin:0;font-size:24px;flex:1 1 260px;min-width:0}
-.seats{display:flex;flex-wrap:wrap;gap:8px}
+.seats{display:flex;gap:8px;order:3;flex:1 0 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.seat{flex:0 0 auto;white-space:nowrap}
 .seat{display:inline-flex;align-items:center;gap:8px;font-size:16px;font-weight:700;padding:4px 12px;border-radius:99px;border:1px solid var(--hair)}
 .seat i{width:11px;height:11px;border-radius:50%;background:var(--ink-3)}
 .seat small{font-weight:500;color:var(--ink-3);font-size:14px}
@@ -54,9 +55,20 @@ header h2{margin:0;font-size:24px;flex:1 1 260px;min-width:0}
 .seat.thinking i{background:#d9a12b;animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.seat.thinking i{animation:none}}
-.info{padding:8px 24px;border-bottom:1px solid var(--hair);display:flex;flex-wrap:wrap;gap:6px 18px;font-size:15px;color:var(--ink-2)}
+.brief{flex:0 0 auto;border-bottom:1px solid var(--hair)}
+.brief[hidden]{display:none}
+.briefbar{width:100%;display:flex;align-items:center;gap:10px;background:transparent;color:var(--ink-3);font-size:15px;font-weight:700;padding:6px 24px;border-radius:0;text-align:left}
+.briefbar:hover{color:var(--ink)}
+#briefPeek{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.brief:not(.shut) #briefPeek{visibility:hidden}
+.briefbody{height:var(--bh,8em);overflow:auto}
+.brief.shut .briefbody,.brief.shut .grip{display:none}
+.grip{height:14px;cursor:row-resize;touch-action:none;display:flex;align-items:center;justify-content:center}
+.grip::before{content:"";width:56px;height:4px;border-radius:2px;background:var(--hair)}
+.grip:hover::before,.grip:focus-visible::before,.grip.drag::before{background:var(--ink-3)}
+.info{padding:2px 24px 6px;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:15px;color:var(--ink-2)}
 .info b{color:var(--ink)}
-.topic{margin:0;padding:12px 24px;border-bottom:1px solid var(--hair);color:var(--ink-2);white-space:pre-wrap;font-size:17px;max-height:9em;overflow:auto}
+.topic{margin:0;padding:0 24px 10px;color:var(--ink-2);white-space:pre-wrap;font-size:17px}
 .log{flex:1;overflow:auto;padding:20px 24px 30px;display:flex;flex-direction:column;gap:18px}
 .msg{display:flex;flex-direction:column;gap:4px;max-width:900px;min-width:0}
 .meta{display:flex;gap:10px;align-items:baseline}
@@ -142,9 +154,12 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
   .seats{order:3;flex:1 0 100%;flex-wrap:nowrap;overflow-x:auto;gap:6px}
   .seat{font-size:14px;padding:2px 10px;white-space:nowrap;flex:0 0 auto}
   body:not(.more) .seat small,body:not(.more) .seat .opbtn,body:not(.more) .seat .leave{display:none}
-  body:not(.more) header>button:not(.mob),body:not(.more) .info,body:not(.more) .topic{display:none}
+  body:not(.more) header>button:not(.mob){display:none}
   header>button:not(.mob){order:4;padding:6px 12px;font-size:15px}
-  .info,.topic,.log,footer,.note,#pending,#replybar{padding-left:12px;padding-right:12px}
+  .info,.topic,.briefbar,.log,footer,.note,#pending,#replybar{padding-left:12px;padding-right:12px}
+  .briefbar{font-size:14px;padding-top:4px;padding-bottom:4px}
+  .topic{font-size:15px}
+  .grip{height:20px}
   .log{padding-top:12px;gap:12px;min-height:0}
   .body{padding:9px 12px}
   .who{font-size:15px}
@@ -177,8 +192,11 @@ fieldset label.s{display:block;font-size:15px;color:var(--ink-2);margin:8px 0 4p
     <button class="ghost" id="autoBtn" hidden></button>
     <button class="danger" id="closeBtn" hidden data-t="close"></button>
   </header>
-  <div class="info" id="info" hidden></div>
-  <p class="topic" id="topic" hidden></p>
+  <section class="brief" id="brief" hidden>
+    <button type="button" class="briefbar" id="briefBar" aria-expanded="true"><span id="briefTog">▾</span><span data-t="briefL"></span><span id="briefPeek"></span></button>
+    <div class="briefbody" id="briefBody"><div class="info" id="info"></div><p class="topic" id="topic"></p></div>
+    <div class="grip" id="grip" tabindex="0" role="separator" aria-orientation="horizontal"></div>
+  </section>
   <div class="log" id="log"><div class="empty" data-t="emptyLog"></div></div>
   <div id="replybar" hidden><span id="replytxt"></span><button type="button" id="replyx" aria-label="cancel">×</button></div>
   <div id="pending"></div>
@@ -248,7 +266,8 @@ const I18N={
    autoOff:"★ Autonomous — click to stop",noteAuto:"Autonomous mode: the AIs keep working until they post a [MILESTONE].",
    noteClosed:"Closed. The AIs are leaving; the record will be saved into the project's docs/meetings/.",
    noteSaved:p=>"Closed. Record saved to: "+p,noServer:"Cannot reach the meeting server: ",needAI:"Invite at least one AI.",
-   meetings:{open:"open",closed:"closed",msgs:" msgs"},none:"No meetings yet"},
+   meetings:{open:"open",closed:"closed",msgs:" msgs"},none:"No meetings yet",
+   briefL:"Topic",sayShort:"Speak as host…",gripTip:"Drag to resize the topic (click the bar above to collapse)"},
  "zh-TW":{app:"AI 會議室",new:"開新會議",pick:"請從左邊選一場會議,或開新會議",models:"換模型",recall:"請回席",close:"散會",
    closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Enter 送出、Shift+Enter 換行;在訊息上按右鍵可回覆)",
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
@@ -275,7 +294,8 @@ const I18N={
    autoOff:"★ 自主中(按一下停止)",noteAuto:"自主會議中:AI 會自己做到發出「【階段成果】」為止。",
    noteClosed:"已散會,AI 退場中,紀錄稍後存回專案的 docs/meetings/。",
    noteSaved:p=>"已散會,紀錄已存到:"+p,noServer:"連不到會議室伺服器:",needAI:"至少邀請一位 AI。",
-   meetings:{open:"進行中",closed:"已散會",msgs:" 則"},none:"還沒有會議"}};
+   meetings:{open:"進行中",closed:"已散會",msgs:" 則"},none:"還沒有會議",
+   briefL:"議題",sayShort:"以主持人身分發言…",gripTip:"拖拉調整議題區高度(按上方標題列可收合)"}};
 const EFF={en:{"":"default",low:"low",medium:"medium",high:"high",xhigh:"x-high",max:"max",ultra:"ultra"},
   "zh-TW":{"":"預設",low:"低",medium:"中",high:"高",xhigh:"更高",max:"最高",ultra:"極限"}};
 const ALL=["Claude","GPT","Gemini"];
@@ -289,7 +309,7 @@ const SEQS={};
 function applyLang(){
   document.documentElement.lang=LANG;document.title=L().app;
   document.querySelectorAll("[data-t]").forEach(el=>{const k=el.dataset.t;if(typeof L()[k]==="string")el.textContent=L()[k];});
-  $("say").placeholder=L().say;$("f-topic").placeholder=L().topicPh;$("f-proj-other").placeholder=L().otherPh;
+  $("say").placeholder=matchMedia("(max-width:820px)").matches?L().sayShort:L().say;$("f-topic").placeholder=L().topicPh;$("f-proj-other").placeholder=L().otherPh;$("grip").title=L().gripTip;
   $("l-en").classList.toggle("on",LANG==="en");$("l-zh").classList.toggle("on",LANG!=="en");
   opt($("f-mode"),[["discuss",L().modes.discuss],["review",L().modes.review]],$("f-mode").value||"discuss");
   if(cur){const c=cur;cur=null;open(c);}else{$("note").textContent=L().noteLive;}
@@ -314,7 +334,7 @@ async function loadList(){
     b.appendChild(s);b.onclick=()=>open(r.id);
     const d=document.createElement("button");d.className="del";d.textContent=L().del;d.title=L().delTitle;
     d.onclick=async()=>{if(d.dataset.arm!=="1"){d.dataset.arm="1";d.textContent=L().delSure;setTimeout(()=>{d.dataset.arm="";d.textContent=L().del;},4000);return;}
-      try{const res=await post(R(r.id)+"/delete");if(r.id===cur){cur=null;clearInterval(timer);$("log").textContent="";$("title").textContent=L().pick;$("info").hidden=true;$("topic").hidden=true;$("seats").textContent="";
+      try{const res=await post(R(r.id)+"/delete");if(r.id===cur){cur=null;clearInterval(timer);$("log").textContent="";$("title").textContent=L().pick;$("brief").hidden=true;$("seats").textContent="";
         ["inviteBtn","cfgBtn","recall","closeBtn","autoBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
         $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;loadList();}catch(e){$("note").textContent=e.message;}};
     row.append(b,d);box.appendChild(row);}
@@ -400,8 +420,9 @@ async function open(id){
   const tok=++openTok;
   cur=id;last=0;$("log").textContent="";clearInterval(timer);for(const k in SEQS)delete SEQS[k];
   try{const j=await api(R(id)+"/messages?after=0");const m=j.meta;
-    $("title").textContent=m.title;$("topic").hidden=false;$("topic").textContent=m.topic;
-    const inf=$("info");inf.hidden=false;inf.textContent="";
+    $("title").textContent=m.title;$("brief").hidden=false;$("topic").textContent=m.topic;
+    $("briefPeek").textContent=(m.topic||"").split("\n").find(s=>s.trim())||"";
+    const inf=$("info");inf.textContent="";
     const rows=[[L().info.project,m.project],[L().info.type,L().modes[m.mode]||m.mode],[L().info.role,m.lead?L().leads(m.lead):L().equal]];
     if(m.branch)rows.push([L().info.copy,m.worktree+" ("+m.branch+")"]);
     for(const[k,v]of rows){const s=document.createElement("span");const b=document.createElement("b");b.textContent=k+": ";s.append(b,v||"—");inf.appendChild(s);}
@@ -450,6 +471,28 @@ document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").h
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("ctx").hidden=true;}});
 $("send").onclick=send;
 $("clip").title=L().attach;$("clip").onclick=()=>$("pick").click();
+const NARROW=matchMedia("(max-width:820px)");
+const bkey=()=>"amr-brief-"+(NARROW.matches?"m":"d");
+let BRIEF;
+function loadBrief(){BRIEF={shut:NARROW.matches,h:0};try{Object.assign(BRIEF,JSON.parse(localStorage.getItem(bkey())||"{}"));}catch(e){}
+  $("briefBody").style.removeProperty("--bh");drawBrief(false);}
+NARROW.addEventListener("change",loadBrief);
+function drawBrief(save){$("brief").classList.toggle("shut",BRIEF.shut);$("briefTog").textContent=BRIEF.shut?"▸":"▾";
+  $("briefBar").setAttribute("aria-expanded",String(!BRIEF.shut));
+  if(BRIEF.h)$("briefBody").style.setProperty("--bh",BRIEF.h+"px");
+  if(save)try{localStorage.setItem(bkey(),JSON.stringify(BRIEF));}catch(e){}}
+function setBriefH(h){BRIEF.h=Math.round(Math.max(48,Math.min(h,innerHeight*0.6)));drawBrief(false);}
+$("briefBar").onclick=()=>{BRIEF.shut=!BRIEF.shut;drawBrief(true);};
+$("grip").addEventListener("pointerdown",e=>{const g=e.currentTarget,y0=e.clientY,h0=$("briefBody").offsetHeight;
+  g.setPointerCapture(e.pointerId);g.classList.add("drag");
+  const move=ev=>setBriefH(h0+ev.clientY-y0);
+  const up=()=>{g.classList.remove("drag");g.removeEventListener("pointermove",move);g.removeEventListener("pointerup",up);g.removeEventListener("pointercancel",up);drawBrief(true);};
+  g.addEventListener("pointermove",move);g.addEventListener("pointerup",up);g.addEventListener("pointercancel",up);});
+$("grip").addEventListener("keydown",e=>{const d=e.key==="ArrowUp"?-24:e.key==="ArrowDown"?24:0;
+  if(d){e.preventDefault();setBriefH($("briefBody").offsetHeight+d);drawBrief(true);}});
+$("seats").addEventListener("wheel",e=>{const s=e.currentTarget;
+  if(Math.abs(e.deltaY)>Math.abs(e.deltaX)&&s.scrollWidth>s.clientWidth){s.scrollLeft+=e.deltaY;e.preventDefault();}},{passive:false});
+loadBrief();
 $("navBtn").onclick=()=>document.body.classList.toggle("nav");
 $("moreBtn").onclick=()=>document.body.classList.toggle("more");
 $("list").addEventListener("click",e=>{if(e.target.closest(".item"))document.body.classList.remove("nav");});
@@ -547,7 +590,7 @@ $("form2").addEventListener("submit",async e=>{e.preventDefault();$("go2").disab
   $("go2").disabled=false;});
 
 applyLang();
-api("/api/info").then(i=>{if(i.host_name&&i.host_name!==I18N["zh-TW"].host){const z=I18N["zh-TW"];z.say=z.say.replace(z.host,i.host_name);z.host=i.host_name;if(LANG!=="en")applyLang();}}).catch(()=>{});
+api("/api/info").then(i=>{if(i.host_name&&i.host_name!==I18N["zh-TW"].host){const z=I18N["zh-TW"];z.say=z.say.replace(z.host,i.host_name);z.sayShort=z.sayShort.replace(z.host,i.host_name);z.host=i.host_name;if(LANG!=="en")applyLang();}}).catch(()=>{});
 const h=decodeURIComponent(location.hash.slice(1));if(h)open(h);
 setInterval(loadList,10000);
 </script>
