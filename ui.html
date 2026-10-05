@@ -256,7 +256,7 @@ const I18N={
    modeL:"Meeting type",langL:"Meeting language",inviteL:"Invite now (optional — you can also invite later)",leadL:"Lead",topicL:"Topic (background, constraints, what to decide)",
    topicPh:"Write down the constraints you have already decided; the AIs will follow them.",cancel:"Cancel",start:"Start meeting",apply:"Apply",
    modelsNote:"Only the AI you change rejoins with the new model; it reads the earlier messages and continues.",
-   model:"Model",effort:"Reasoning effort",dflt:"default",notInstalled:"Not installed",notSigned:"Not signed in",
+   model:"Model",effort:"Reasoning effort",dflt:"default",latestVer:"now",pinnedVer:"fixed version",notInstalled:"Not installed",notSigned:"Not signed in",
    allowBtn:"Allow meeting tools",allowNote:"Antigravity CLI runs in the background and cannot ask for permission. This adds one rule to its settings that allows only the meeting-room tools.",
    modes:{discuss:"Discussion",review:"Code review"},equal:"No lead — equal discussion (all read-only)",leads:n=>n+" leads (edits code in an isolated git copy)",
    state:{listening:"listening",thinking:"thinking",away:"away"},host:"Host",system:"System",
@@ -284,7 +284,7 @@ const I18N={
    modeL:"會議類型",langL:"會議語言",inviteL:"現在就邀請(可不選,開會後再邀請)",leadL:"誰當主審",topicL:"議題說明(背景、限制、要討論出什麼)",
    topicPh:"把你已經決定的限制寫清楚,AI 會照著討論。",cancel:"取消",start:"開會",apply:"套用",
    modelsNote:"只有改到的那位 AI 會換新模型重新入席,並讀完前面的紀錄接著討論。",
-   model:"模型",effort:"思考深度",dflt:"預設",notInstalled:"未安裝",notSigned:"尚未登入",
+   model:"模型",effort:"思考深度",dflt:"預設",latestVer:"目前",pinnedVer:"固定版本",notInstalled:"未安裝",notSigned:"尚未登入",
    allowBtn:"允許會議室工具",allowNote:"Antigravity 命令列程式在背景執行時無法跳出詢問,需要在它的設定裡加一條規則,只允許會議室的工具。",
    modes:{discuss:"討論",review:"互相檢查程式碼"},equal:"平等討論(大家都只能看)",leads:n=>n+" 主審(在獨立副本改程式)",
    state:{listening:"在聽",thinking:"思考中",away:"不在席"},host:"主持人",system:"系統",
@@ -533,7 +533,8 @@ function seatPicker(s,cfg,withCheck,agent){
     fs.append(p,b);}
   const l1=document.createElement("label");l1.className="s";l1.textContent=L().model;const sm=document.createElement("select");sm.className="m";
   const dflt=M.default||{model:"",effort:""};
-  opt(sm,M.models.map(m=>[m.id,(m.id?m.label:L().dflt)+(m.id&&m.id===dflt.model?" ("+L().dflt+")":"")]),cfg.model||dflt.model||"");
+  const mlabel=m=>!m.id?L().dflt:m.latest?m.label+" ("+L().latestVer+" "+m.latest+")":m.pinned?m.label+" ("+L().pinnedVer+")":m.label;
+  opt(sm,M.models.map(m=>[m.id,mlabel(m)+(m.id&&m.id===dflt.model?" ("+L().dflt+")":"")]),cfg.model||dflt.model||"");
   fs.append(l1,sm);
   const se=document.createElement("select");se.className="e";
   const effs=()=>{if(s==="GPT"){const m=M.models.find(x=>x.id===sm.value);return m?m.efforts:["low","medium","high"];}return M.efforts||[];};

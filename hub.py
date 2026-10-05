@@ -534,7 +534,17 @@ def agents():
     return out
 
 
-CLAUDE_MODELS = ["", "fable", "opus", "sonnet", "haiku"]
+CLAUDE_MODELS = [
+    {"id": ""},
+    {"id": "fable", "label": "Fable", "latest": "5.1"},
+    {"id": "opus", "label": "Opus", "latest": "5.5"},
+    {"id": "sonnet", "label": "Sonnet", "latest": "5.5"},
+    {"id": "haiku", "label": "Haiku", "latest": "4.5"},
+    {"id": "claude-fable-5-1", "label": "Fable 5.1", "pinned": True},
+    {"id": "claude-opus-5-5", "label": "Opus 5.5", "pinned": True},
+    {"id": "claude-sonnet-5-5", "label": "Sonnet 5.5", "pinned": True},
+    {"id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5", "pinned": True},
+]
 CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 _AGY_MODELS = {"t": 0, "v": []}
 
@@ -589,7 +599,7 @@ def model_options():
         pass
     if dm and not any(g["id"] == dm for g in gpt):
         gpt.insert(0, {"id": dm, "label": dm, "note": "", "efforts": ["low", "medium", "high"]})
-    return {"Claude": {"models": [{"id": m, "label": m.capitalize()} for m in CLAUDE_MODELS],
+    return {"Claude": {"models": CLAUDE_MODELS,
                        "efforts": CLAUDE_EFFORTS, "default": {"model": "", "effort": ""}},
             "last": last_models(),
             "GPT": {"models": gpt, "default": {"model": dm, "effort": de}},

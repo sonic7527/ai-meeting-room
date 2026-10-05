@@ -11,7 +11,7 @@
 - **Mock-ups right in the conversation.** An AI can post a self-contained HTML page with its message; it is shown inline and stays interactive (animations, buttons, dragging) — no URLs to open.
 - **Same project, same context.** Pick a folder; every AI reads the same files (CLAUDE.md, AGENTS.md, GEMINI.md, README) before speaking.
 - **Lead and assistants.** Optionally make one AI the lead: it does all code changes and git commits **in an isolated git worktree outside your project**; the others review and do read-only tasks it assigns.
-- **Per-AI model and reasoning effort**, changeable mid-meeting and remembered for next time.
+- **Per-AI model and reasoning effort**, changeable mid-meeting and remembered for next time. Claude offers each family name (always the newest version, with the current version shown) and fixed versions.
 - **Several meetings at once**, one browser tab each; delete old meetings from the list.
 - **Self-healing.** An AI that stops unexpectedly is brought back automatically; after a restart, open meetings get their AIs back.
 - **Transcripts saved into your project** (`docs/meetings/<date>_<title>/transcript.md`) when you close the meeting. Saved meetings stay readable in the sidebar under **Saved meetings (read-only)** even after the room itself has been deleted.
