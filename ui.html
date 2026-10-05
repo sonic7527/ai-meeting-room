@@ -259,7 +259,7 @@ const I18N={
    model:"Model",effort:"Reasoning effort",dflt:"default",latestVer:"now",pinnedVer:"fixed version",notInstalled:"Not installed",notSigned:"Not signed in",
    allowBtn:"Allow meeting tools",allowNote:"Antigravity CLI runs in the background and cannot ask for permission. This adds one rule to its settings that allows only the meeting-room tools.",
    modes:{discuss:"Discussion",review:"Code review"},equal:"No lead — equal discussion (all read-only)",leads:n=>n+" leads (edits code in an isolated git copy)",
-   state:{listening:"listening",thinking:"thinking",away:"away"},host:"Host",system:"System",
+   state:{listening:"listening",thinking:"working",away:"away"},busyMin:m=>` ${m} min`,autoOffSure:"Turn off autonomous mode? The AIs will stop after {n} messages in a row and wait for you.",host:"Host",system:"System",
    info:{project:"Project",type:"Type",role:"Roles",copy:"Lead's copy"},replied:" replied",pending:" pending",
    noteLive:"The AIs speak for themselves here; interject any time and they answer you first.",
    noteRun:(n)=>"The AIs have sent "+n+" messages in a row and are waiting for you.",
@@ -287,7 +287,7 @@ const I18N={
    model:"模型",effort:"思考深度",dflt:"預設",latestVer:"目前",pinnedVer:"固定版本",notInstalled:"未安裝",notSigned:"尚未登入",
    allowBtn:"允許會議室工具",allowNote:"Antigravity 命令列程式在背景執行時無法跳出詢問,需要在它的設定裡加一條規則,只允許會議室的工具。",
    modes:{discuss:"討論",review:"互相檢查程式碼"},equal:"平等討論(大家都只能看)",leads:n=>n+" 主審(在獨立副本改程式)",
-   state:{listening:"在聽",thinking:"思考中",away:"不在席"},host:"主持人",system:"系統",
+   state:{listening:"在聽",thinking:"工作中",away:"不在席"},busyMin:m=>` ${m} 分鐘`,autoOffSure:"確定關閉自主會議?關閉後 AI 連續發言 {n} 則就會停下來等你。",host:"主持人",system:"系統",
    info:{project:"專案",type:"類型",role:"角色",copy:"主審副本"},replied:" 已回應",pending:" 待回應",
    noteLive:"AI 會在這裡各自發言;你隨時可以插話,他們會先回應你。",
    noteRun:(n)=>"AI 已連講 "+n+" 則,正在等你發言。",
@@ -391,7 +391,7 @@ function renderSeats(j){
   for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
     const i=document.createElement("i");const sm=document.createElement("small");const us=(j.usage||{})[s];
     sm.textContent=j.labels[s]+(us?" · "+us.line:"");if(us){sm.title=us.tip;if(us.high)sm.style.color="var(--warn)";}
-    el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+" "),sm);
+    const _bs=(j.busy_sec||{})[s];el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+(j.seats[s]==="thinking"&&_bs>=60?L().busyMin(Math.floor(_bs/60)):"")+" "),sm);
     if(!j.meta.closed){const isLead=(j.meta.lead||"")===s;const op=document.createElement("button");op.type="button";
       op.className="opbtn"+(isLead?" on":"");op.textContent=isLead?L().operating:L().operate;op.title=isLead?L().operateOff:L().operateTip;
       op.onclick=async()=>{op.disabled=true;try{await post(R(cur)+"/lead",{seat:isLead?"":s});await open(cur);}catch(e){$("note").textContent=e.message;op.disabled=false;}};
@@ -512,7 +512,7 @@ $("say").addEventListener("keydown",e=>{
   if(e.key==="Escape"&&REPLY){clearReply();return;}
   if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing&&e.keyCode!==229){e.preventDefault();send();}});
 $("autoBtn").onclick=async()=>{const b=$("autoBtn");if(!cur)return;b.disabled=true;
-  try{const j=await (await fetch(R(cur)+"/messages?after=99999")).json();await post(R(cur)+"/auto",{on:!j.meta.auto});await open(cur);}
+  try{const j=await (await fetch(R(cur)+"/messages?after=99999")).json();if(j.meta.auto&&!confirm(L().autoOffSure.replace("{n}",j.ai_limit_off))){b.disabled=false;return;}await post(R(cur)+"/auto",{on:!j.meta.auto});await open(cur);}
   catch(e){$("note").textContent=e.message;}b.disabled=false;};
 $("closeBtn").onclick=async()=>{const b=$("closeBtn");if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent=L().closeSure;setTimeout(()=>{b.dataset.arm="";b.textContent=L().close;},4000);return;}
   await post(R(cur)+"/close");b.dataset.arm="";b.textContent=L().close;poll();loadList();};

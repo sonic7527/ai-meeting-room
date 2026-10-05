@@ -175,6 +175,7 @@ T = {
         "bad_image": "Attachment not found, too large (images/pages {img_mb} MB, video/audio {media_mb} MB max) or "
                      "unsupported (png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav): {p}",
         "no_new": "No new messages. Call wait_for_messages again.",
+        "run_left": "You may post {left} more message(s) in a row before waiting for the {host} (current limit {n}; the limit changes when autonomous mode is turned on or off).",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
         "need_git": "A lead needs a git project (the lead edits code in an isolated git worktree). "
                     "This folder is not a git project; use an equal discussion instead.",
@@ -232,6 +233,7 @@ T = {
         "bad_image": "附件不存在、太大(圖片/網頁 {img_mb} MB、影音 {media_mb} MB 以內),或格式不支援"
                      "(png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav):{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
+        "run_left": "目前還能連續發言 {left} 則才需要等{host}(上限 {n} 則;{host}開關自主會議時上限會跟著變)。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
         "need_git": "指定主審需要 git 專案(主審在獨立副本裡改程式);這個資料夾不是 git 專案,請改用平等討論",
         "no_codex": "找不到 Codex:請安裝 Codex 並以 ChatGPT 帳號登入(或設定 CODEX_BIN)",
@@ -269,6 +271,7 @@ class Room:
         self.msgs = []
         self.cond = threading.Condition()
         self.waiting = {}
+        self.busy_since = {}
         self.procs = {}
         self.dir = os.path.join(DATA, rid)
 
@@ -1359,9 +1362,12 @@ def call_tool(name, a):
                     room.cond.wait(timeout=min(left, 15))
         finally:
             room.waiting[seat] = False
+            room.busy_since[seat] = time.time()
         new = room.msgs[after:]
         return {"messages": fmt(room, new), "last_seq": len(room.msgs), "closed": room.meta.get("closed", False),
-                "can_speak": room.ai_run() < run_limit(room), "hint": "" if new else tx(room, "no_new")}
+                "can_speak": room.ai_run() < run_limit(room), "hint": "" if new else tx(room, "no_new"),
+                "run_left": max(0, run_limit(room) - room.ai_run()), "run_limit": run_limit(room),
+                "run_note": tx(room, "run_left", left=max(0, run_limit(room) - room.ai_run()), n=run_limit(room))}
     raise KeyError(f"no such tool: {name}")
 
 
@@ -1539,7 +1545,9 @@ class H(BaseHTTPRequestHandler):
                                     "seats": {s: r.state(s) for s in room_seats(r)},
                                     "usage": seat_usage(r),
                                     "labels": {s: seat_label(r, s) for s in room_seats(r)},
-                                    "ai_run": r.ai_run(), "ai_limit": run_limit(r)})
+                                    "ai_run": r.ai_run(), "ai_limit": run_limit(r), "ai_limit_off": AI_RUN_LIMIT,
+                                    "busy_sec": {s: int(time.time() - r.busy_since[s]) for s in room_seats(r)
+                                                 if r.state(s) == "thinking" and s in r.busy_since}})
         if parts[:1] == ["files"] and len(parts) == 3:
             if any(x in ("..", "") or "/" in x or "\\" in x for x in parts[1:]):
                 return self._send(404, {"error": "not found"})
