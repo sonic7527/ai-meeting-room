@@ -34,7 +34,8 @@ aside h1{margin:0;font-size:23px;letter-spacing:.03em}
 .list{overflow:auto;flex:1;padding:8px}
 .item{display:block;width:100%;text-align:left;background:transparent;color:var(--ink);font-weight:500;padding:10px 12px;border-radius:8px}
 .item small{display:block;color:var(--ink-3);font-size:14px;font-weight:400}
-.item.on{background:var(--me-bg)} .item.closed{opacity:.6}
+.item.on{background:var(--me-bg)} .item.closed{opacity:.6} .item.closed.on{opacity:1}
+.arch{margin:14px 12px 4px;font-size:13px;font-weight:700;color:var(--ink-3)}
 .itemrow{display:flex;align-items:center;gap:4px}
 .itemrow .item{flex:1;min-width:0}
 .del{flex:0 0 auto;background:transparent;color:var(--ink-3);border:1px solid transparent;padding:4px 8px;font-size:13px;font-weight:600}
@@ -266,7 +267,7 @@ const I18N={
    autoOff:"★ Autonomous — click to stop",noteAuto:"Autonomous mode: the AIs keep working until they post a [MILESTONE].",
    noteClosed:"Closed. The AIs are leaving; the record will be saved into the project's docs/meetings/.",
    noteSaved:p=>"Closed. Record saved to: "+p,noServer:"Cannot reach the meeting server: ",needAI:"Invite at least one AI.",
-   meetings:{open:"open",closed:"closed",msgs:" msgs"},none:"No meetings yet",
+   meetings:{open:"open",closed:"closed",saved:"saved",msgs:" msgs"},none:"No meetings yet",archived:"Saved meetings (read-only)",
    briefL:"Topic",sayShort:"Speak as host…",gripTip:"Drag to resize the topic (click the bar above to collapse)"},
  "zh-TW":{app:"AI 會議室",new:"開新會議",pick:"請從左邊選一場會議,或開新會議",models:"換模型",recall:"請回席",close:"散會",
    closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Enter 送出、Shift+Enter 換行;在訊息上按右鍵可回覆)",
@@ -294,7 +295,7 @@ const I18N={
    autoOff:"★ 自主中(按一下停止)",noteAuto:"自主會議中:AI 會自己做到發出「【階段成果】」為止。",
    noteClosed:"已散會,AI 退場中,紀錄稍後存回專案的 docs/meetings/。",
    noteSaved:p=>"已散會,紀錄已存到:"+p,noServer:"連不到會議室伺服器:",needAI:"至少邀請一位 AI。",
-   meetings:{open:"進行中",closed:"已散會",msgs:" 則"},none:"還沒有會議",
+   meetings:{open:"進行中",closed:"已散會",saved:"已存檔",msgs:" 則"},none:"還沒有會議",archived:"已存檔的會議(唯讀)",
    briefL:"議題",sayShort:"以主持人身分發言…",gripTip:"拖拉調整議題區高度(按上方標題列可收合)"}};
 const EFF={en:{"":"default",low:"low",medium:"medium",high:"high",xhigh:"x-high",max:"max",ultra:"ultra"},
   "zh-TW":{"":"預設",low:"低",medium:"中",high:"高",xhigh:"更高",max:"最高",ultra:"極限"}};
@@ -338,6 +339,11 @@ async function loadList(){
         ["inviteBtn","cfgBtn","recall","closeBtn","autoBtn"].forEach(x=>$(x).hidden=true);$("say").disabled=true;$("send").disabled=true;try{history.replaceState(null,"","#");}catch(e){}}
         $("note").textContent=res.kept?L().deletedKept(res.kept):L().deleted;loadList();}catch(e){$("note").textContent=e.message;}};
     row.append(b,d);box.appendChild(row);}
+  let arcs=[];try{arcs=await api("/api/archives");}catch(e){}
+  if(arcs.length){const h=document.createElement("div");h.className="arch";h.textContent=L().archived;box.appendChild(h);}
+  for(const r of arcs){const b=document.createElement("button");b.className="item closed"+(r.id===cur?" on":"");b.textContent=r.title;
+    const s=document.createElement("small");s.textContent=L().meetings.saved+" · "+r.created.slice(5,16).replace("T"," ")+" · "+r.count+L().meetings.msgs;
+    b.appendChild(s);b.onclick=()=>open(r.id);box.appendChild(b);}
 }
 
 function whoName(w){return w==="user"?L().host:w==="system"?L().system:w;}
@@ -407,6 +413,7 @@ async function poll(){
     curMeta=j.meta;curSeats=Object.keys(j.seats);for(const s of curSeats)SEQS[s]=SEQS[s]||[];
     const fresh=j.messages.filter(m=>m.seq>last);fresh.forEach(add);last=Math.max(last,j.last_seq);refreshAcks();
     if(fresh.length&&atBottom)log.scrollTop=log.scrollHeight;
+    if(j.meta.archive)clearInterval(timer);
     closed=!!j.meta.closed;renderSeats(j);
     $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;$("clip").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
@@ -423,7 +430,7 @@ async function open(id){
     $("title").textContent=m.title;$("brief").hidden=false;$("topic").textContent=m.topic;
     $("briefPeek").textContent=(m.topic||"").split("\n").find(s=>s.trim())||"";
     const inf=$("info");inf.textContent="";
-    const rows=[[L().info.project,m.project],[L().info.type,L().modes[m.mode]||m.mode],[L().info.role,m.lead?L().leads(m.lead):L().equal]];
+    const rows=m.archive?[[L().info.project,m.project],[L().info.type,m.mode]]:[[L().info.project,m.project],[L().info.type,L().modes[m.mode]||m.mode],[L().info.role,m.lead?L().leads(m.lead):L().equal]];
     if(m.branch)rows.push([L().info.copy,m.worktree+" ("+m.branch+")"]);
     for(const[k,v]of rows){const s=document.createElement("span");const b=document.createElement("b");b.textContent=k+": ";s.append(b,v||"—");inf.appendChild(s);}
   }catch(e){}

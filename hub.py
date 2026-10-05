@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import glob
 import json
 import os
@@ -371,6 +372,64 @@ def get_room(rid):
     if not r:
         raise KeyError(f"meeting not found / 找不到會議: {rid}")
     return r
+
+
+ARC_PREFIX = "arc~"
+
+
+def _arc_id(path):
+    return ARC_PREFIX + base64.urlsafe_b64encode(os.path.abspath(path).encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _arc_head(d):
+    title, topic, sections = os.path.basename(d), "", []
+    try:
+        with open(os.path.join(d, "transcript.md"), encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+    except OSError:
+        return title, topic, ""
+    if lines and lines[0].startswith("# "):
+        title = lines[0][2:].strip()
+    sections = [i for i, ln in enumerate(lines) if ln.startswith("## ")]
+    head = [ln.split(":", 1)[1].strip() for ln in lines[:sections[0] if sections else len(lines)]
+            if ln.startswith("- ") and ":" in ln]
+    if len(sections) >= 2:
+        topic = "\n".join(lines[sections[0] + 1:sections[1]]).strip()
+    return title, topic, head[2] if len(head) > 2 else ""
+
+
+def archives():
+    live = {os.path.normcase(os.path.abspath(r.meta["export"])) for r in ROOMS.values() if r.meta.get("export")}
+    out = []
+    for proj in (p["path"] for p in known_projects()):
+        base = os.path.join(proj, EXPORT_SUBDIR)
+        if not os.path.isdir(base):
+            continue
+        for n in os.listdir(base):
+            d = os.path.join(base, n)
+            log = os.path.join(d, "log.jsonl")
+            if os.path.normcase(os.path.abspath(d)) in live or not os.path.isfile(log):
+                continue
+            out.append({"id": _arc_id(d), "dir": d, "project": proj})
+    return out
+
+
+def get_archive(aid):
+    for a in archives():
+        if a["id"] == aid:
+            return a
+    raise KeyError(f"meeting not found / 找不到會議: {aid}")
+
+
+def archive_messages(a):
+    msgs = []
+    with open(os.path.join(a["dir"], "log.jsonl"), encoding="utf-8") as fh:
+        for ln in fh:
+            if ln.strip():
+                m = json.loads(ln)
+                m["imgs"] = [f for f in m.get("imgs") or [] if os.path.isfile(os.path.join(a["dir"], f))]
+                msgs.append(m)
+    return msgs
 
 
 def _ver(p):
@@ -1438,6 +1497,27 @@ class H(BaseHTTPRequestHandler):
             rows = [{"id": r.id, "title": r.meta["title"], "created": r.meta["created"],
                      "closed": r.meta.get("closed", False), "count": len(r.msgs)} for r in ROOMS.values()]
             return self._send(200, sorted(rows, key=lambda x: x["created"], reverse=True))
+        if parts == ["api", "archives"]:
+            rows = []
+            for a in archives():
+                title, _, _ = _arc_head(a["dir"])
+                with open(os.path.join(a["dir"], "log.jsonl"), encoding="utf-8") as fh:
+                    lines = [ln for ln in fh if ln.strip()]
+                created = json.loads(lines[0]).get("at", "") if lines else ""
+                rows.append({"id": a["id"], "title": title, "created": created, "count": len(lines)})
+            return self._send(200, sorted(rows, key=lambda x: x["created"], reverse=True))
+        if parts[:2] == ["api", "rooms"] and len(parts) == 4 and parts[3] == "messages" and parts[2].startswith(ARC_PREFIX):
+            try:
+                a = get_archive(parts[2])
+            except KeyError as e:
+                return self._send(404, {"error": str(e)})
+            after = int(parse_qs(u.query).get("after", ["0"])[0])
+            title, topic, kind = _arc_head(a["dir"])
+            msgs = archive_messages(a)
+            meta = {"title": title, "topic": topic, "project": a["project"], "mode": kind, "archive": True,
+                    "closed": True, "export": a["dir"], "created": msgs[0]["at"] if msgs else ""}
+            return self._send(200, {"meta": meta, "messages": msgs[after:], "last_seq": len(msgs), "seats": {},
+                                    "usage": {}, "labels": {}, "ai_run": 0, "ai_limit": 1})
         if parts[:2] == ["api", "rooms"] and len(parts) == 4 and parts[3] == "messages":
             try:
                 r = get_room(parts[2])
@@ -1453,7 +1533,13 @@ class H(BaseHTTPRequestHandler):
         if parts[:1] == ["files"] and len(parts) == 3:
             if any(x in ("..", "") or "/" in x or "\\" in x for x in parts[1:]):
                 return self._send(404, {"error": "not found"})
-            p = os.path.join(DATA, parts[1], parts[2])
+            if parts[1].startswith(ARC_PREFIX):
+                try:
+                    p = os.path.join(get_archive(parts[1])["dir"], parts[2])
+                except KeyError:
+                    return self._send(404, {"error": "not found"})
+            else:
+                p = os.path.join(DATA, parts[1], parts[2])
             ext = os.path.splitext(p)[1].lower()
             if ext not in ALL_EXT or not os.path.isfile(p):
                 return self._send(404, {"error": "not found"})
