@@ -65,7 +65,7 @@ Open meetings keep going: their AIs rejoin automatically and re-read the convers
 
 ### One-time setup for Gemini
 
-Antigravity CLI runs in the background and cannot ask you for permission, so the meeting tools must be allowed in its settings. In the **Invite** (or **New meeting**) dialog, click **Allow meeting tools** under Gemini. It adds exactly two rules to `~/.gemini/antigravity-cli/settings.json` — `mcp(meeting/*)` (the meeting tools) and `read_url(*)` (so it can open links you paste) — nothing else. All three AIs can read web pages: Claude opens pages directly, Gemini opens them with `read_url`, GPT uses Codex web search (search results, which may lag behind the live page).
+Antigravity CLI runs in the background and cannot ask you for permission, so the meeting tools must be allowed in its settings. In the **Invite** (or **New meeting**) dialog, click **Allow meeting tools** under Gemini. It adds exactly two rules to `~/.gemini/antigravity-cli/settings.json` — `mcp(meeting/*)` (the meeting tools) and `read_url(*)` (so it can open links you paste) — nothing else. All three AIs can read web pages: Claude opens pages directly, Gemini opens them with `read_url`, GPT uses Codex web search (search results, which may lag behind the live page). Antigravity model names usually carry the effort already (e.g. `gemini-3.8-flash-high`); for those the room does not pass a separate effort, which would make `agy` refuse to start.
 
 ### Optional: the `meeting` command for Claude Code
 

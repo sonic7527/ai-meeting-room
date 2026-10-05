@@ -928,7 +928,7 @@ def start_seat(room, seat, restart=False):
                 "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
-        if cfg.get("effort"):
+        if cfg.get("effort") and not re.search(r"-(low|medium|high|max)$", cfg.get("model") or ""):
             args += ["--effort", cfg["effort"]]
         args += ["-p", seat_prompt(room, seat, ticket)]
         cwd = work
