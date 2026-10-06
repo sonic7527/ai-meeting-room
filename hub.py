@@ -160,10 +160,14 @@ T = {
                         "check it with git and restore it.",
         "dismissed": "The {host} asked {seat} to leave.",
         "auto_on": "The {host} turned on **autonomous mode**: do not wait for the {host}. Split the work among "
-                   "yourselves and keep going until the task is done or reaches a natural milestone. Then ONE of you "
-                   "posts a message starting with [MILESTONE] that lists what was done, the output files and what "
-                   "the {host} needs to decide; after that everyone calls wait_for_messages. (Safety cap: {n} "
-                   "messages in a row.)",
+                   "yourselves and keep going until the {host}'s goal is fully reached. Post a message starting with "
+                   "[MILESTONE] ONLY when the goal is done, or when you are blocked on something only the {host} "
+                   "can decide and no reasonable default lets you continue. Progress reports in between start with "
+                   "[SUMMARY] and do not stop the meeting; if a decision can wait, take the cautious default, note it "
+                   "in the summary and keep working. After a [MILESTONE] everyone calls wait_for_messages. "
+                   "(Safety cap: {n} messages in a row.)",
+        "auto_reminder": " Autonomous mode is on: keep working toward the {host}'s goal; use [SUMMARY] for "
+                         "progress, [MILESTONE] only when the goal is done or truly blocked on the {host}.",
         "auto_off": "The {host} turned off autonomous mode; back to at most {n} messages in a row before waiting.",
         "auto_done": "A milestone was posted; autonomous mode is off. Everyone waits for the {host}.",
         "default": "default", "account_default": "Account default",
@@ -221,9 +225,13 @@ T = {
         "lead_off": "{host}取消指派,大家回到只能看。",
         "proj_changed": "⚠️ 原專案 {project} 在會議期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
         "dismissed": "{host}請 {seat} 離席。",
-        "auto_on": "{host}開啟**自主會議**:不用等{host}回覆,請自行分工,把工作做完或做到告一段落。"
-                   "完成時由一位發一則開頭為「【階段成果】」的訊息,列出做了什麼、產出檔案、要{host}決定的事;"
-                   "之後所有人呼叫 wait_for_messages 等{host}。(防失控上限:連續 {n} 則)",
+        "auto_on": "{host}開啟**自主會議**:不用等{host}回覆,請自行分工,一直做到{host}給的目標完成。"
+                   "只有兩種情況才由一位發開頭為「【階段成果】」的訊息(列出做了什麼、產出檔案、要{host}決定的事)"
+                   "並全員呼叫 wait_for_messages 等{host}:①目標全部完成;②卡在只有{host}能決定、而且沒有合理預設"
+                   "可以先往下做的事。中途進度一律用開頭「【小結】」報告,會議不會停;可以晚點決定的事先照保守預設"
+                   "往下做、在小結裡註明。(防失控上限:連續 {n} 則)",
+        "auto_reminder": "(自主會議進行中:朝{host}的目標繼續做;進度用【小結】,只有目標完成或卡在只有{host}"
+                         "能決定的事才發【階段成果】。)",
         "auto_off": "{host}關閉自主會議,回到連講 {n} 則就等{host}。",
         "auto_done": "已發出階段成果,自主會議自動關閉,大家等{host}回來看。",
         "default": "預設", "account_default": "帳號預設",
@@ -1416,7 +1424,8 @@ def call_tool(name, a):
         return {"messages": fmt(room, new), "last_seq": len(room.msgs), "closed": room.meta.get("closed", False),
                 "can_speak": room.ai_run() < run_limit(room), "hint": "" if new else tx(room, "no_new"),
                 "run_left": max(0, run_limit(room) - room.ai_run()), "run_limit": run_limit(room),
-                "run_note": tx(room, "run_left", left=max(0, run_limit(room) - room.ai_run()), n=run_limit(room))}
+                "run_note": tx(room, "run_left", left=max(0, run_limit(room) - room.ai_run()), n=run_limit(room))
+                + (tx(room, "auto_reminder") if room.meta.get("auto") else "")}
     raise KeyError(f"no such tool: {name}")
 
 
