@@ -148,8 +148,7 @@ T = {
         "seat_fail": "{seat} failed to start: {err}",
         "model_changed": "{seat} switched to {label} and rejoined.",
         "auto_back": "{seat} stopped unexpectedly ({why}) and was brought back automatically.",
-        "limit_hit": "{seat} hit its usage limit (resets: {when}); it will be brought back automatically at {back}.",
-        "limit_back": "{seat}'s usage limit should have reset; brought it back automatically.",
+        "limit_hit": "{seat} hit its usage limit (resets: {when}) and left the meeting automatically; click Invite to bring it back once the limit resets.",
         "resumed": "The meeting room restarted; {seat} rejoined.",
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "invited": "The {host} invited {seat} ({label}).",
@@ -216,8 +215,7 @@ T = {
         "seat_fail": "{seat} 啟動失敗:{err}",
         "model_changed": "{seat} 改用 {label},重新入席。",
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
-        "limit_hit": "{seat} 的用量已達上限(恢復時間:{when}),{back} 會自動請回。",
-        "limit_back": "{seat} 的用量應該已恢復,已自動請回。",
+        "limit_hit": "{seat} 的用量已達上限(恢復時間:{when}),已自動退席;額度恢復後要請它回來請按「邀請」。",
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
         "invited": "{host}邀請 {seat} 入席({label})。",
@@ -882,7 +880,6 @@ def seat_prompt(room, seat, ticket):
 
 
 def start_seat(room, seat, restart=False):
-    LIMIT_BACK.pop((room.id, seat), None)
     if not room.meta.get("closed"):
         guard_project(room)
     p = room.procs.get(seat)
@@ -986,9 +983,7 @@ def start_seat(room, seat, restart=False):
 
 RESTARTS = {}
 USAGE_CACHE = {}
-LIMIT_BACK = {}
 TURN_ENDS = {}
-LIMIT_RETRY = 1800
 LIMIT_RE = re.compile(r"(hit your usage limit|usage limit reached|rate_limit_error|RESOURCE_EXHAUSTED|"
                       r"quota exceeded|exhausted your|\"status\":\"rejected\")", re.I)
 
@@ -1128,15 +1123,6 @@ def _exit_reason(room, seat):
     return "exited"
 
 
-def _limit_back_at(when):
-    m = re.fullmatch(r"(\d{1,2}):(\d{2})", when)
-    if not m:
-        return time.time() + LIMIT_RETRY
-    now = time.localtime()
-    t = time.mktime((now.tm_year, now.tm_mon, now.tm_mday, int(m.group(1)), int(m.group(2)), 0, 0, 0, -1))
-    return (t if t > time.time() else t + 86400) + 120
-
-
 def watchdog():
     while True:
         time.sleep(10)
@@ -1145,16 +1131,6 @@ def watchdog():
                 continue
             for seat in room_seats(room):
                 key = (room.id, seat)
-                if key in LIMIT_BACK and seat not in room.procs:
-                    if time.time() < LIMIT_BACK[key]:
-                        continue
-                    LIMIT_BACK.pop(key)
-                    try:
-                        start_seat(room, seat)
-                        room.add("system", tx(room, "limit_back", seat=seat))
-                    except Exception as e:
-                        room.add("system", tx(room, "seat_fail", seat=seat, err=e))
-                    continue
                 p = room.procs.get(seat)
                 if p is None or p.poll() is None or seat not in (room.meta.get("tickets") or {}):
                     continue
@@ -1162,9 +1138,8 @@ def watchdog():
                 why = _exit_reason(room, seat)
                 room.procs.pop(seat, None)
                 if why.startswith("limit:"):
-                    LIMIT_BACK[key] = _limit_back_at(why[6:])
-                    room.add("system", tx(room, "limit_hit", seat=seat, when=why[6:] or "?",
-                                          back=time.strftime("%H:%M", time.localtime(LIMIT_BACK[key]))))
+                    stop_seat(room, seat)
+                    room.add("system", tx(room, "limit_hit", seat=seat, when=why[6:] or "?"))
                     USAGE_CACHE.pop(room.id, None)
                     continue
                 if why == "done":
@@ -1203,7 +1178,6 @@ def resume_seats():
 
 
 def stop_seat(room, seat):
-    LIMIT_BACK.pop((room.id, seat), None)
     (room.meta.get("tickets") or {}).pop(seat, None)
     room.save_meta()
     p = room.procs.pop(seat, None)
