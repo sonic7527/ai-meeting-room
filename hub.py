@@ -69,8 +69,9 @@ PAGE_EXT = {".html", ".htm"}
 MEDIA_EXT = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
              ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}
 ATTACH_MAX = int(float(os.environ.get("MEETING_IMAGE_MAX_MB", "32")) * 1024 * 1024)
-MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "1024")) * 1024 * 1024)
+MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "4096")) * 1024 * 1024)
 ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT)
+UPLOADS, UPLOADS_DONE, UPLOADS_LOCK = {}, {}, threading.Lock()
 
 
 VIDEO_EXT = {".mp4", ".webm", ".mov"}
@@ -324,6 +325,8 @@ def load_rooms():
         mp = os.path.join(DATA, d, "meta.json")
         if not os.path.isfile(mp):
             continue
+        for part in glob.glob(os.path.join(DATA, d, ".part_*")):
+            os.remove(part)
         with open(mp, encoding="utf-8") as f:
             r = Room(d, json.load(f))
         lp = os.path.join(DATA, d, "log.jsonl")
@@ -1497,10 +1500,75 @@ class H(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
+    def _drain(self, n):
+        while n > 0:
+            chunk = self.rfile.read(min(1 << 20, n))
+            if not chunk:
+                break
+            n -= len(chunk)
+
+    def _upload_chunked(self, room, q, n):
+        if "init" in q:
+            name = (q.get("name") or [""])[0]
+            ext = os.path.splitext(name)[1].lower()
+            total = int((q.get("total") or ["0"])[0] or 0)
+            self._drain(n)
+            if room.meta.get("closed"):
+                return self._send(400, {"error": tx(room, "closed_no_speak")})
+            if ext not in ALL_EXT or total <= 0 or not size_ok(total, ext):
+                return self._send(400, {"error": tx(room, "bad_image", p=name, img_mb=ATTACH_MAX >> 20,
+                                                      media_mb=MEDIA_MAX >> 20)})
+            uid = uuid.uuid4().hex
+            part = os.path.join(room.dir, f".part_{uid}")
+            open(part, "wb").close()
+            with UPLOADS_LOCK:
+                UPLOADS[uid] = {"room": room.id, "part": part, "total": total, "ext": ext}
+            return self._send(200, {"uid": uid})
+        uid = (q.get("uid") or [""])[0]
+        off = int((q.get("off") or ["-1"])[0] or -1)
+        with UPLOADS_LOCK:
+            up = UPLOADS.get(uid)
+            done = UPLOADS_DONE.get(uid)
+        if done:
+            self._drain(n)
+            return self._send(200, {"file": done})
+        if not up or up["room"] != room.id:
+            self._drain(n)
+            return self._send(404, {"error": "upload not found"})
+        have = os.path.getsize(up["part"])
+        if off != have or have + n > up["total"]:
+            self._drain(n)
+            return self._send(409, {"have": have})
+        left = n
+        with open(up["part"], "ab") as f:
+            while left > 0:
+                chunk = self.rfile.read(min(1 << 20, left))
+                if not chunk:
+                    break
+                f.write(chunk)
+                left -= len(chunk)
+        have = os.path.getsize(up["part"])
+        if left > 0:
+            with open(up["part"], "r+b") as f:
+                f.truncate(off)
+            return self._send(400, {"error": "upload interrupted", "have": off})
+        if have < up["total"]:
+            return self._send(200, {"have": have})
+        fn = f"up_{uuid.uuid4().hex[:10]}{up['ext']}"
+        os.replace(up["part"], os.path.join(room.dir, fn))
+        with UPLOADS_LOCK:
+            UPLOADS.pop(uid, None)
+            UPLOADS_DONE[uid] = fn
+        frames_later(room, fn)
+        return self._send(200, {"file": fn})
+
     def _upload(self, room, query):
-        name = (parse_qs(query).get("name") or [""])[0]
-        ext = os.path.splitext(name)[1].lower()
+        q = parse_qs(query)
         n = int(self.headers.get("Content-Length") or 0)
+        if "init" in q or "uid" in q:
+            return self._upload_chunked(room, q, n)
+        name = (q.get("name") or [""])[0]
+        ext = os.path.splitext(name)[1].lower()
         if room.meta.get("closed"):
             return self._send(400, {"error": tx(room, "closed_no_speak")})
         if ext not in ALL_EXT or n <= 0 or not size_ok(n, ext):

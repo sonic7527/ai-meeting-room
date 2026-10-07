@@ -457,10 +457,24 @@ function drawPending(){const box=$("pending");box.textContent="";
   for(const f of PENDING){const sp=document.createElement("span");sp.textContent=f.label;
     const x=document.createElement("button");x.type="button";x.textContent="×";x.onclick=()=>{PENDING=PENDING.filter(y=>y!==f);drawPending();};
     if(f.file)sp.appendChild(x);box.appendChild(sp);}}
+async function uploadChunked(file,progress){const CH=8<<20,U=R(cur)+"/upload?";
+  let r=await fetch(U+"init=1&name="+encodeURIComponent(file.name)+"&total="+file.size,{method:"POST"});
+  let j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+  const uid=j.uid;let off=0;
+  while(true){let tries=0;
+    while(true){let net=null;
+      try{r=await fetch(U+"uid="+uid+"&off="+off,{method:"POST",body:file.slice(off,off+CH)});j=await r.json().catch(()=>({}));}
+      catch(e){net=e;}
+      if(!net){if(r.ok||r.status===409)break;
+        if(r.status<500&&j.have===undefined)throw new Error(j.error||("HTTP "+r.status));
+        if(j.have!==undefined)off=j.have;}
+      if(++tries>=5)throw new Error(net?net.message:(j.error||("HTTP "+r.status)));
+      await new Promise(z=>setTimeout(z,1500*tries));}
+    if(j.file)return j;
+    off=j.have;progress(Math.floor(off*100/file.size));}}
 async function uploadFiles(list){if(!cur||closed)return;
   for(const file of list){const tag={label:L().uploading+" "+file.name+"…",file:null};PENDING.push(tag);drawPending();UPLOADS++;
-    try{const r=await fetch(R(cur)+"/upload?name="+encodeURIComponent(file.name),{method:"POST",body:file});
-      const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+    try{const j=await uploadChunked(file,p=>{tag.label=L().uploading+" "+file.name+" "+p+"%";drawPending();});
       tag.file=j.file;tag.label=file.name+" ("+(file.size>=1048576?(file.size/1048576).toFixed(1)+" MB":Math.ceil(file.size/1024)+" KB")+")";}
     catch(e){PENDING=PENDING.filter(y=>y!==tag);$("note").textContent=L().uploadFail+": "+file.name+" — "+e.message;}
     UPLOADS--;drawPending();}}
