@@ -282,6 +282,7 @@ class Room:
         self.waiting = {}
         self.busy_since = {}
         self.procs = {}
+        self.cids = {}
         self.dir = os.path.join(DATA, rid)
 
     def save_meta(self):
@@ -1733,7 +1734,14 @@ class H(BaseHTTPRequestHandler):
                         return self._send(400, {"error": tx(r, "empty")})
                     if r.meta.get("closed"):
                         return self._send(400, {"error": tx(r, "closed_no_speak")})
-                    return self._send(200, r.add("user", text, files))
+                    cid = str(b.get("cid") or "")[:64]
+                    with r.cond:
+                        if cid and cid in r.cids:
+                            return self._send(200, r.cids[cid])
+                        m = r.add("user", text, files)
+                        if cid:
+                            r.cids[cid] = m
+                    return self._send(200, m)
                 if act == "close":
                     if not r.meta.get("closed"):
                         close_room(r)

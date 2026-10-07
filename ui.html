@@ -247,7 +247,7 @@ const I18N={
    enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
    reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
    attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",
-   operate:"Operate",operating:"★ Operating",operateTip:"Let this AI run programs and edit files in an isolated copy of the project",operateOff:"Click to clear the assignment",uploading:"Uploading",uploadFail:"Upload failed",
+   operate:"Operate",operating:"★ Operating",operateTip:"Let this AI run programs and edit files in an isolated copy of the project",operateOff:"Click to clear the assignment",uploading:"Uploading",uploadFail:"Upload failed",sending:"Sending…",sendFail:"Not sent (your text is kept, press Send again)",
    vetoText:"✕ Rejected this version (no need to revise or reply yet; wait until I have looked at the others).",adoptText:"✓ Adopted.",
    invite:"Invite",inviteGo:"Invite selected",inviteNote:"Tick the AIs to invite and pick their models. They join as soon as you confirm.",
    leave:"ask to leave",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
@@ -275,7 +275,7 @@ const I18N={
    enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
    reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
    attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",
-   operate:"指派操作",operating:"★ 操作中",operateTip:"讓這位 AI 在專案的獨立副本裡跑程式、改檔",operateOff:"按一下取消指派",uploading:"上傳中",uploadFail:"上傳失敗",
+   operate:"指派操作",operating:"★ 操作中",operateTip:"讓這位 AI 在專案的獨立副本裡跑程式、改檔",operateOff:"按一下取消指派",uploading:"上傳中",uploadFail:"上傳失敗",sending:"送出中…",sendFail:"沒送出去(原文還在,請再按一次送出)",
    vetoText:"✕ 否決這版(先不用改、不用回覆,等我看完其他版本再說)。",adoptText:"✓ 採用。",
    invite:"邀請",inviteGo:"邀請入席",inviteNote:"勾選要邀請的 AI、選好模型,按下確認就入席。",
    leave:"請離席",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
@@ -319,7 +319,7 @@ function applyLang(){
 function setLang(l){LANG=l;try{localStorage.setItem("amr-lang",l);}catch(e){}applyLang();}
 $("l-en").onclick=()=>setLang("en");$("l-zh").onclick=()=>setLang("zh-TW");
 
-async function api(path,o){const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j;}
+async function api(path,o){const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||("HTTP "+r.status));e.status=r.status;throw e;}return j;}
 const post=(path,body)=>api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{})});
 function hm(iso){try{return new Date(iso).toLocaleTimeString(LANG,{hour:"2-digit",minute:"2-digit",hour12:false});}catch(e){return"";}}
 function opt(sel,items,val){sel.textContent="";for(const[v,t]of items){const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);}sel.value=val;if(sel.value!==val&&sel.options.length)sel.selectedIndex=0;}
@@ -408,8 +408,10 @@ function renderSeats(j){
 }
 
 let polling=false,openTok=0;
+let pollAgain=false;
 async function poll(){
-  if(!cur||polling)return;
+  if(!cur)return;
+  if(polling){pollAgain=true;return;}
   polling=true;const room=cur;
   try{
     const j=await api(R(room)+"/messages?after="+last);
@@ -426,7 +428,7 @@ async function poll(){
     ab.className=j.meta.auto?"primary":"ghost";
     $("note").textContent=closed?(j.meta.export?L().noteSaved(j.meta.export):L().noteClosed):(j.ai_run>=j.ai_limit?L().noteRun(j.ai_run):(j.meta.auto?L().noteAuto:L().noteLive));
   }catch(e){$("note").textContent=L().noServer+e.message;}
-  finally{polling=false;}
+  finally{polling=false;if(pollAgain){pollAgain=false;poll();}}
 }
 async function open(id){
   const tok=++openTok;
@@ -451,7 +453,12 @@ function quoteLine(m){return"↩ #"+m.seq+" "+whoName(m.who)+"："+snippet(m)+"\
 function startReply(m){REPLY=m;$("replytxt").textContent=L().replyTo+" "+whoName(m.who)+"："+snippet(m);$("replybar").hidden=false;$("say").focus();}
 function clearReply(){REPLY=null;$("replybar").hidden=true;}
 $("replyx").onclick=clearReply;
-async function postText(text,files){await post(R(cur)+"/messages",{text,files:files||[]});await poll();$("log").scrollTop=$("log").scrollHeight;}
+async function postText(text,files){const cid=Date.now().toString(36)+Math.random().toString(36).slice(2,10);let err;
+  for(let i=0;i<4;i++){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),15000);
+    try{await api(R(cur)+"/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,files:files||[],cid}),signal:ac.signal});err=null;break;}
+    catch(e){err=e;if(e.status&&e.status<500)break;await new Promise(z=>setTimeout(z,1500*(i+1)));}
+    finally{clearTimeout(t);}}
+  if(err)throw err;await poll();$("log").scrollTop=$("log").scrollHeight;}
 let PENDING=[],UPLOADS=0;
 function drawPending(){const box=$("pending");box.textContent="";
   for(const f of PENDING){const sp=document.createElement("span");sp.textContent=f.label;
@@ -481,8 +488,9 @@ async function uploadFiles(list){if(!cur||closed)return;
 async function send(){
   const raw=$("say").value.trim();const files=PENDING.filter(f=>f.file).map(f=>f.file);
   if((!raw&&!files.length)||!cur||closed||UPLOADS)return;$("send").disabled=true;
+  $("note").textContent=L().sending;
   try{await postText((REPLY?quoteLine(REPLY):"")+raw,files);$("say").value="";clearReply();PENDING=[];drawPending();}
-  catch(e){$("note").textContent=e.message;}
+  catch(e){$("note").textContent=L().sendFail+": "+(e.name==="AbortError"?"timeout":e.message);}
   $("send").disabled=closed;
 }
 async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
