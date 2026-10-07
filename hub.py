@@ -409,8 +409,16 @@ def _arc_head(d):
     return title, topic, head[2] if len(head) > 2 else ""
 
 
+def prune_removed_rooms():
+    with ROOMS_LOCK:
+        for rid, r in list(ROOMS.items()):
+            if r.meta.get("closed") and not os.path.isdir(r.dir):
+                del ROOMS[rid]
+
+
 def archives():
-    live = {os.path.normcase(os.path.abspath(r.meta["export"])) for r in ROOMS.values() if r.meta.get("export")}
+    prune_removed_rooms()
+    live ={os.path.normcase(os.path.abspath(r.meta["export"])) for r in ROOMS.values() if r.meta.get("export")}
     out = []
     for proj in (p["path"] for p in known_projects()):
         base = os.path.join(proj, EXPORT_SUBDIR)
@@ -1542,6 +1550,7 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/api/projects":
             return self._send(200, known_projects())
         if parts == ["api", "rooms"]:
+            prune_removed_rooms()
             rows = [{"id": r.id, "title": r.meta["title"], "created": r.meta["created"],
                      "closed": r.meta.get("closed", False), "count": len(r.msgs)} for r in ROOMS.values()]
             return self._send(200, sorted(rows, key=lambda x: x["created"], reverse=True))
