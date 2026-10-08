@@ -1034,28 +1034,49 @@ def _clock(ts):
         return "?"
 
 
+def _since_reset(pct, reset):
+    try:
+        return 0 if pct is not None and reset and time.time() > float(reset) else pct
+    except (TypeError, ValueError):
+        return pct
+
+
 def usage_gpt():
     root = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
-    files = sorted(glob.glob(os.path.join(root, "*", "*", "*", "rollout-*.jsonl")), key=os.path.getmtime, reverse=True)[:10]
+    files = sorted(glob.glob(os.path.join(root, "*", "*", "*", "rollout-*.jsonl")), reverse=True)[:10]
     for f in files:
         for line in reversed(_tail(f).splitlines()):
             if '"rate_limits"' not in line:
                 continue
             try:
-                rl = _find_key(json.loads(line), "rate_limits")
+                d = json.loads(line)
+                rl = _find_key(d, "rate_limits")
             except ValueError:
                 continue
-            if isinstance(rl, dict) and isinstance(rl.get("primary"), dict):
-                p, w = rl["primary"], rl.get("secondary") or {}
-                return {"5h": p.get("used_percent"), "5h_reset": p.get("resets_at"),
-                        "week": w.get("used_percent"), "week_reset": w.get("resets_at"), "at": os.path.getmtime(f)}
+            if not isinstance(rl, dict):
+                continue
+            out = {"5h": None, "5h_reset": None, "week": None, "week_reset": None}
+            for w in (rl.get("primary"), rl.get("secondary")):
+                if isinstance(w, dict) and w.get("used_percent") is not None:
+                    k = "week" if (w.get("window_minutes") or 0) >= 1440 else "5h"
+                    out[k], out[k + "_reset"] = _since_reset(w["used_percent"], w.get("resets_at")), w.get("resets_at")
+            if out["5h"] is None and out["week"] is None:
+                continue
+            try:
+                out["at"] = datetime.fromisoformat(str(d.get("timestamp")).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                out["at"] = os.path.getmtime(f)
+            return out
     return None
 
 
 def usage_claude():
     files = sorted(glob.glob(os.path.join(LOCAL, "seats", "*", "Claude.log")), key=os.path.getmtime, reverse=True)[:5]
     for f in files:
-        for line in reversed(_tail(f).splitlines()):
+        text = _tail(f)
+        if '"rate_limit_event"' not in text:
+            text = _tail(f, 16 << 20)
+        for line in reversed(text.splitlines()):
             if '"rate_limit_event"' not in line:
                 continue
             try:
@@ -1065,8 +1086,9 @@ def usage_claude():
             uw = info.get("unifiedWindows") or {}
             fh, sd = uw.get("five_hour") or {}, uw.get("seven_day") or {}
             pct = lambda x: None if x is None else round(float(x) * 100)
-            return {"5h": pct(fh.get("utilization")), "5h_reset": fh.get("resetsAt"),
-                    "week": pct(sd.get("utilization")), "week_reset": sd.get("resetsAt"), "at": os.path.getmtime(f)}
+            return {"5h": _since_reset(pct(fh.get("utilization")), fh.get("resetsAt")), "5h_reset": fh.get("resetsAt"),
+                    "week": _since_reset(pct(sd.get("utilization")), sd.get("resetsAt")), "week_reset": sd.get("resetsAt"),
+                    "at": os.path.getmtime(f)}
     return None
 
 
@@ -1093,13 +1115,15 @@ def seat_usage(room):
             u = fn()
         except Exception:
             u = None
-        if u and u.get("5h") is not None:
-            line = (f"5 小時 {u['5h']:.0f}%・本週 {u['week'] or 0:.0f}%" if zh
-                    else f"5h {u['5h']:.0f}% · week {u['week'] or 0:.0f}%")
-            tip = (f"5 小時額度 {_clock(u['5h_reset'])} 恢復;本週額度 {_clock(u['week_reset'])} 恢復(帳號整體用量,{_clock(u['at'])} 更新)"
-                   if zh else f"5h window resets {_clock(u['5h_reset'])}; weekly resets {_clock(u['week_reset'])} "
-                              f"(whole account, updated {_clock(u['at'])})")
-            out[seat] = {"line": line, "tip": tip, "high": u["5h"] >= 80}
+        if u and (u.get("5h") is not None or u.get("week") is not None):
+            wins = [(k, u[k], u[k + "_reset"]) for k in ("5h", "week") if u.get(k) is not None]
+            name = {"5h": "5 小時" if zh else "5h", "week": "本週" if zh else "week"}
+            line = ("・" if zh else " · ").join(f"{name[k]} {p:.0f}%" for k, p, _ in wins)
+            when = ("；" if zh else "; ").join(
+                (f"{name[k]}額度 {_clock(r)} 恢復" if zh else f"{name[k]} resets {_clock(r)}") for k, _, r in wins)
+            tip = (f"{when}(帳號整體用量,{_clock(u['at'])} 更新)" if zh
+                   else f"{when} (whole account, updated {_clock(u['at'])})")
+            out[seat] = {"line": line, "tip": tip, "high": max(p for _, p, _ in wins) >= 80}
     try:
         g = usage_gemini(room)["tokens"]
     except Exception:
