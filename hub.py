@@ -76,6 +76,18 @@ ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT)
 UPLOADS, UPLOADS_DONE, UPLOADS_LOCK = {}, {}, threading.Lock()
 
 
+def _seat_mcp():
+    try:
+        with open(os.path.join(HERE, "config.json"), encoding="utf-8") as f:
+            v = json.load(f).get("seat_mcp") or {}
+        return v if isinstance(v, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+SEAT_MCP = _seat_mcp()
+
+
 VIDEO_EXT = {".mp4", ".webm", ".mov"}
 FRAMES_N = 12
 
@@ -958,10 +970,12 @@ def start_seat(room, seat, restart=False):
         if not exe:
             raise RuntimeError(tx(room, "no_claude"))
         mcp_cfg = os.path.join(seat_dir, "claude_mcp.json")
+        extra_mcp = {k: v for k, v in SEAT_MCP.items() if k != "meeting"}
         with open(mcp_cfg, "w", encoding="utf-8") as f:
-            json.dump({"mcpServers": {"meeting": {"type": "http", "url": url}}}, f)
+            json.dump({"mcpServers": {"meeting": {"type": "http", "url": url}, **extra_mcp}}, f)
         meet = ("mcp__meeting__join_meeting,mcp__meeting__send_message,"
-                "mcp__meeting__wait_for_messages,mcp__meeting__read_messages")
+                "mcp__meeting__wait_for_messages,mcp__meeting__read_messages"
+                + "".join(f",mcp__{k}" for k in extra_mcp))
         if lead == "Claude":
             args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
                     "--mcp-config", mcp_cfg, "--strict-mcp-config", "--permission-mode", "acceptEdits",
