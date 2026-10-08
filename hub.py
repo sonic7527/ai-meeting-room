@@ -31,6 +31,8 @@ def _load_local_config():
                      ("media_max_mb", "MEETING_MEDIA_MAX_MB")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
+    if cfg.get("seat_path") and not os.environ.get("MEETING_SEAT_PATH"):
+        os.environ["MEETING_SEAT_PATH"] = os.pathsep.join(cfg["seat_path"])
     if cfg.get("allowed_origins") and not os.environ.get("MEETING_ALLOWED_ORIGINS"):
         os.environ["MEETING_ALLOWED_ORIGINS"] = ",".join(cfg["allowed_origins"])
 
@@ -909,6 +911,8 @@ def start_seat(room, seat, restart=False):
     seat_dir = os.path.join(LOCAL, "seats", room.id)
     os.makedirs(seat_dir, exist_ok=True)
     env = os.environ.copy()
+    if os.environ.get("MEETING_SEAT_PATH"):
+        env["PATH"] = os.environ["MEETING_SEAT_PATH"] + os.pathsep + env.get("PATH", "")
     lead = room.meta.get("lead")
     if seat == "GPT":
         exe = find_codex()
