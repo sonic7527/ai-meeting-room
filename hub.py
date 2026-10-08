@@ -941,6 +941,15 @@ def start_seat(room, seat, restart=False):
                 "-c", f'mcp_servers.meeting.url="{url}"',
                 "-c", "mcp_servers.meeting.tool_timeout_sec=300", "-c", "tools.web_search=true",
                 "-c", 'mcp_servers.meeting.default_tools_approval_mode="approve"']
+        for name, srv in SEAT_MCP.items():
+            if name == "meeting" or not srv.get("command"):
+                continue
+            pre = f"mcp_servers.{name}."
+            args += ["-c", pre + "command=" + json.dumps(srv["command"]),
+                     "-c", pre + "args=" + json.dumps(srv.get("args") or []),
+                     "-c", pre + 'default_tools_approval_mode="approve"']
+            if srv.get("env"):
+                args += ["-c", pre + "env={" + ",".join(f"{k}={json.dumps(str(v))}" for k, v in srv["env"].items()) + "}"]
         if cfg.get("model"):
             args += ["-m", cfg["model"]]
         if cfg.get("effort"):
