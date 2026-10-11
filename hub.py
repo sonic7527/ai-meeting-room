@@ -1087,6 +1087,7 @@ def start_seat(room, seat, restart=False):
 
 RESTARTS = {}
 USAGE_CACHE = {}
+STALE_USAGE_SEC = 6 * 3600   # 用量紀錄超過 6 小時沒更新＝讀不到,不顯示舊百分比
 TURN_ENDS = {}
 LIMIT_RE = re.compile(r"(hit your usage limit|usage limit reached|rate_limit_error|RESOURCE_EXHAUSTED|"
                       r"quota exceeded|exhausted your|\"status\":\"rejected\")", re.I)
@@ -1207,8 +1208,14 @@ def seat_usage(room):
             u = fn()
         except Exception:
             u = None
+        if u and u.get("at") and time.time() - float(u["at"]) > STALE_USAGE_SEC:
+            # 資料太舊就不顯示百分比(2026-10-11:Codex 10/10 改版後 exec 不再寫 sessions/rollout,GPT 一直停在 60%)
+            out[seat] = {"line": (f"讀不到(停在 {_clock(u['at'])})" if zh else f"unavailable (last {_clock(u['at'])})"),
+                         "tip": ("這個 AI 的程式沒有留下最新用量紀錄,請到官方網站看剩餘額度" if zh
+                                 else "No recent usage record from this CLI; check the provider's site"), "high": False}
+            continue
         if u and (u.get("5h") is not None or u.get("week") is not None):
-            wins = [(k, u[k], u[k + "_reset"]) for k in ("5h", "week") if u.get(k) is not None]
+            wins =[(k, u[k], u[k + "_reset"]) for k in ("5h", "week") if u.get(k) is not None]
             name = {"5h": "5 小時" if zh else "5h", "week": "本週" if zh else "week"}
             line = ("・" if zh else " · ").join(f"{name[k]} {p:.0f}%" for k, p, _ in wins)
             when = ("；" if zh else "; ").join(
