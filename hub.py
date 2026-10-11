@@ -1135,8 +1135,12 @@ def _since_reset(pct, reset):
 
 
 def usage_gpt():
-    root = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
-    files = sorted(glob.glob(os.path.join(root, "*", "*", "*", "rollout-*.jsonl")), reverse=True)[:10]
+    # GPT 席位可能用獨立的 CODEX_HOME(例如 ~/.codex-seat),跟平常的 ~/.codex 都找,取檔名時間最新的
+    # (2026-10-11:只讀 ~/.codex 時一直停在 10/10 的 60%,席位實際寫在 ~/.codex-seat)
+    roots = {os.environ.get("CODEX_HOME") or "", os.path.join(os.path.expanduser("~"), ".codex-seat"),
+             os.path.join(os.path.expanduser("~"), ".codex")}
+    files = [f for r in roots if r for f in glob.glob(os.path.join(r, "sessions", "*", "*", "*", "rollout-*.jsonl"))]
+    files = sorted(files, key=os.path.basename, reverse=True)[:10]
     for f in files:
         for line in reversed(_tail(f).splitlines()):
             if '"rate_limits"' not in line:
