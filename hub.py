@@ -28,7 +28,8 @@ def _load_local_config():
     for key, var in (("host_name", "MEETING_HOST_NAME"), ("lang", "MEETING_LANG"), ("port", "MEETING_PORT"),
                      ("project", "MEETING_PROJECT"), ("home", "MEETING_HOME"), ("export_dir", "MEETING_EXPORT_DIR"),
                      ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("auto_run_limit", "MEETING_AUTO_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
-                     ("media_max_mb", "MEETING_MEDIA_MAX_MB")):
+                     ("media_max_mb", "MEETING_MEDIA_MAX_MB"), ("helper", "MEETING_HELPER"),
+                     ("helper_model", "MEETING_HELPER_MODEL")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
     if cfg.get("seat_path") and not os.environ.get("MEETING_SEAT_PATH"):
@@ -56,7 +57,24 @@ EXPORT_SUBDIR = os.environ.get("MEETING_EXPORT_DIR", os.path.join("docs", "meeti
 PORT = int(os.environ.get("MEETING_PORT", "7720"))
 ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in os.environ.get("MEETING_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 DEFAULT_LANG = os.environ.get("MEETING_LANG", "en")
-SEATS = ("Claude", "GPT", "Gemini")
+SEATS = ("Claude", "GPT", "Gemini", "Helper")
+# 2026-10-11 站長:第四席「助手」= 另一個 Claude(預設 Sonnet),不規劃、不驗收,只照其他席位或主持人的點名做重複工作
+# (批次算圖、組片、跑檢查),讓主力專心。新會議一律自動入席(config "helper": false 可關)。
+HELPER = "Helper"
+HELPER_REQUIRED = os.environ.get("MEETING_HELPER", "1").lower() not in ("0", "false", "no", "")
+HELPER_DEFAULT_MODEL = os.environ.get("MEETING_HELPER_MODEL", "sonnet")   # 會議裡可再換;重複工作用 haiku 省額度
+HELPER_CALLS = ("Helper", "helper", "助手")
+
+
+def seat_name(room, seat):
+    """顯示用名稱:助手席在中文會議顯示「助手」"""
+    if seat == HELPER and (room.meta.get("lang") or DEFAULT_LANG) == "zh-TW":
+        return "助手"
+    return seat
+
+
+def calls_helper(m):
+    return m["who"] == "user" or any(k in m["text"] for k in HELPER_CALLS)
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 AUTO_RUN_LIMIT = int(os.environ.get("MEETING_AUTO_RUN_LIMIT", "120"))
 DONE_MARK = ("【階段成果】", "[MILESTONE]")
@@ -317,7 +335,7 @@ class Room:
         for m in reversed(self.msgs):
             if m["who"] == "user":
                 break
-            if m["who"] in SEATS:
+            if m["who"] in SEATS and m["who"] != HELPER:
                 n += 1
         return n
 
@@ -357,7 +375,7 @@ def room_seats(room):
 
 
 def others_of(room, seat, lang=None):
-    o = [x for x in room_seats(room) if x != seat]
+    o = [seat_name(room, x) for x in room_seats(room) if x != seat]
     lang = lang or room.meta.get("lang") or DEFAULT_LANG
     return ("、" if lang == "zh-TW" else " and ").join(o) or ("（無）" if lang == "zh-TW" else "(nobody)")
 
@@ -545,12 +563,13 @@ def allow_meeting_in_agy():
             json.dump(d, f, ensure_ascii=False, indent=2)
 
 
-FINDERS = {"Claude": find_claude, "GPT": find_codex, "Gemini": find_gemini}
+FINDERS = {"Claude": find_claude, "GPT": find_codex, "Gemini": find_gemini, "Helper": find_claude}
 INSTALL_HINT = {
     "Claude": "Install Claude Code (https://claude.com/claude-code) and sign in with your Claude account.",
     "GPT": "Install OpenAI Codex (desktop app or `npm i -g @openai/codex`) and sign in with your ChatGPT account.",
     "Gemini": "Install Antigravity CLI (Windows: `irm https://antigravity.google/cli/install.ps1 | iex`), run `agy` once and "
               "sign in with Google, then click \"Allow meeting tools\" here (adds only mcp(meeting/*) to agy's settings).",
+    "Helper": "The helper is a second Claude Code seat (Sonnet by default): install Claude Code and sign in.",
 }
 
 
@@ -641,6 +660,8 @@ def model_options():
         gpt.insert(0, {"id": dm, "label": dm, "note": "", "efforts": ["low", "medium", "high"]})
     return {"Claude": {"models": CLAUDE_MODELS,
                        "efforts": CLAUDE_EFFORTS, "default": {"model": "", "effort": ""}},
+            "Helper": {"models": CLAUDE_MODELS, "efforts": CLAUDE_EFFORTS,
+                       "default": {"model": HELPER_DEFAULT_MODEL, "effort": ""}, "required": HELPER_REQUIRED},
             "last": last_models(),
             "GPT": {"models": gpt, "default": {"model": dm, "effort": de}},
             "Gemini": {"models": [{"id": "", "label": ""}] + agy_models(), "efforts": ["low", "medium", "high", "max"],
@@ -673,7 +694,7 @@ def seat_label(room, seat):
         dm, de = codex_defaults()
         e = c.get("effort") or de
         return f"{c.get('model') or dm or tx(room, 'default')} · {eff.get(e, e)}"
-    m = c.get("model") or ""
+    m = c.get("model") or (HELPER_DEFAULT_MODEL if seat == HELPER else "")
     if seat == "Gemini":
         return f"{m or tx(room, 'default')} · {eff.get(c.get('effort', ''), c.get('effort'))}"
     return f"{m.capitalize() if m else tx(room, 'account_default')} · {eff.get(c.get('effort', ''), c.get('effort'))}"
@@ -846,6 +867,27 @@ ROLE = {
                   "anything beyond read-only goes back to {other}.\n"
                   "- For changes that are needed, give file, line and the suggested edit, and let {other} make it. "
                   "{other} writes the [SUMMARY].",
+        "helper": "You are the **helper seat** (shown as Helper). You do not plan, propose, review or judge quality; you do "
+                  "repetitive hands-on work when someone asks you: batch renders with given scripts and parameters, "
+                  "side-by-side videos, frame grabs, conversions, running check scripts and listing their numbers.\n"
+                  "- Act only when the host or another seat calls you (\"@Helper\" or \"Helper\"). Otherwise keep calling "
+                  "wait_for_messages silently: no opinions, no \"agreed\". In step 2 just say in one line that you are ready.\n"
+                  "- Follow the instruction exactly. If it is unclear (which script, which parameters, output name), ask "
+                  "the one who asked; never guess and never change parameters on your own. If seats disagree, the Claude "
+                  "seat decides.\n"
+                  "- Never judge (no \"looks fine\", \"motion is natural\"). Report what you did, for whose request "
+                  "(message number), output paths, time taken, check numbers, and error text verbatim.\n"
+                  "- Write only in your own folder {out}; version every file name; never overwrite other seats' files; "
+                  "do not modify project files or run git writes.\n"
+                  "- One GPU is shared: before rendering, check nothing else is rendering (e.g. tasklist for "
+                  "UnrealEditor-Cmd / blender); run one render at a time; when the host says to stop rendering, stop "
+                  "immediately and say so.\n"
+                  "- When a job is done, report it and ask for the next one.",
+        "has_helper": "\n\nThis meeting has a **helper seat (Helper, a cheaper Claude)** for repetitive hands-on work: "
+                      "batch renders, side-by-side videos, frame grabs, running check scripts. Write \"@Helper\" plus an "
+                      "exact instruction (script, parameters, output name, what to report) to hand work over and focus on "
+                      "the hard parts yourself. The helper does not judge quality; checking its results is still yours. "
+                      "It shares the one GPU: check before you render too.",
         "review": "\n\nThis is a **code review**: start with git status, git diff, git log, git show to see the changes. "
                   "Whoever made the change explains the intent; the reviewer lists issues one by one with file and line "
                   "and what would go wrong; the author answers each (real issue / not an issue + why).",
@@ -870,6 +912,21 @@ ROLE = {
                   "- 你的工作:對 {other} 的方案與改動提出自己的意見,找漏洞、查證事實、提出風險與替代做法。\n"
                   "- {other} 指派給你的工作(「@{seat} 請…」)要照做,做完把結果回報在會議室;超出唯讀範圍的請 {other} 自己做。\n"
                   "- 需要動手改的地方,寫清楚檔名、行號、建議怎麼改,交給 {other} 執行。【小結】由 {other} 寫。",
+        "helper": "你是**助手席**(會議裡顯示「助手」)。你**不規劃、不提方案、不做驗收判斷**,只在有人點名時做重複性的動手工作:"
+                  "照指定腳本與參數批次算圖、組並排片、抽格、轉檔、跑檢查腳本並列出數字。\n"
+                  "- **只有{host}或其他席位點名你(訊息裡有「@助手」「助手」或「Helper」)才動作**;其他時候安靜地一直呼叫 "
+                  "wait_for_messages,不發表意見、不回「同意」。上面「怎麼開會」第 2 步改成只發一句「已就緒」。\n"
+                  "- 照指令做。指令不清楚(哪支腳本、什麼參數、輸出叫什麼)就問下指令的人,**不要自己猜、不要自己改參數**。"
+                  "席位之間指令衝突時以 Claude 席位為準。\n"
+                  "- **不下判斷**(不寫「看過沒問題」「動作自然」)。回報寫:做了哪件(對應誰的第幾則)、輸出路徑(正斜線)、"
+                  "花多久、檢查數字、錯誤訊息原文。\n"
+                  "- 只寫自己的資料夾 {out},檔名帶版本號;不覆蓋別人的檔、不改專案檔、不做 git 寫入。\n"
+                  "- **顯示卡只有一張**:開算前先查有沒有別人在算(例如 tasklist 看 UnrealEditor-Cmd、blender),同時只跑一個;"
+                  "{host}說暫停算圖就立刻停、回一句「已停」。\n"
+                  "- 做完一件就回報,接著問下一件。",
+        "has_helper": "\n\n這場有一位**助手席(會議裡顯示「助手」,較便宜的 Claude)**,專做重複性的動手工作:批次算圖、組並排片、"
+                      "抽格、跑檢查腳本。要交辦就寫「@助手」加明確指令(腳本、參數、輸出檔名、要回報什麼),你自己專心攻難的部分。"
+                      "助手不判斷好壞,它的成果還是要你自己看過;它跟大家共用一張顯示卡,你開算前也要先查。",
         "review": "\n\n這場是**互相檢查程式碼**:先用 git status、git diff、git log、git show 看改動範圍。"
                   "說明改動的一方講清楚用意;檢查的一方逐項列問題,每個附檔名與行號、說明會出什麼錯;被檢查的一方逐項回應(是問題/不是問題+理由)。",
     },
@@ -884,8 +941,12 @@ def role_text(room, seat):
     kw = dict(other=other, seat=seat, host=tx(room, "host"), wt=room.meta.get("worktree"),
               branch=room.meta.get("branch"), project=room.meta.get("project"),
               out=os.path.join(LOCAL, "seats", room.id, seat.lower()))
+    if seat == HELPER:
+        return R["helper"].format(**kw)
     r = R["equal"] if not lead else (R["lead"] if lead == seat else R["assist"])
     r = r.format(**kw)
+    if HELPER in room_seats(room):
+        r += R["has_helper"]
     if room.meta.get("mode") == "review":
         r += R["review"]
     return r
@@ -988,7 +1049,7 @@ def start_seat(room, seat, restart=False):
         meet = ("mcp__meeting__join_meeting,mcp__meeting__send_message,"
                 "mcp__meeting__wait_for_messages,mcp__meeting__read_messages"
                 + "".join(f",mcp__{k}" for k in extra_mcp))
-        if lead == "Claude":
+        if lead == "Claude" and seat != HELPER:
             args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
                     "--mcp-config", mcp_cfg, "--strict-mcp-config", "--permission-mode", "acceptEdits",
                     "--add-dir", seat_dir, "--add-dir", room.dir,
@@ -999,14 +1060,15 @@ def start_seat(room, seat, restart=False):
                     "--mcp-config", mcp_cfg, "--strict-mcp-config", "--add-dir", room.dir, "--add-dir", project_of(room),
                     "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch,Bash",
                     "--disallowedTools", "Edit,Write,NotebookEdit,PowerShell," + bash_rules(LEAD_DENY + GIT_WRITE)]
-        if cfg.get("model"):
-            args += ["--model", cfg["model"]]
+        model = cfg.get("model") or (HELPER_DEFAULT_MODEL if seat == HELPER else "")
+        if model:
+            args += ["--model", model]
         if cfg.get("effort"):
             args += ["--effort", cfg["effort"]]
-        if lead == "Claude":
+        if lead == "Claude" and seat != HELPER:
             cwd = project_of(room)
         else:
-            cwd = os.path.join(seat_dir, "claude")
+            cwd = os.path.join(seat_dir, seat.lower())
             os.makedirs(cwd, exist_ok=True)
         env["MCP_TOOL_TIMEOUT"] = "300000"
     room.meta.setdefault("tickets", {})[seat] = ticket
@@ -1389,7 +1451,7 @@ TOOLS = [
 
 def fmt(room, msgs):
     host = tx(room, "host")
-    return [{"seq": m["seq"], "who": host if m["who"] == "user" else m["who"], "text": m["text"],
+    return [{"seq": m["seq"], "who": host if m["who"] == "user" else seat_name(room, m["who"]), "text": m["text"],
              "has_image": bool(m.get("imgs")), "files": [attach_info(room, f) for f in m.get("imgs") or []],
              "at": m["at"]} for m in msgs]
 
@@ -1452,7 +1514,8 @@ def call_tool(name, a):
         room.waiting[seat] = True
         try:
             with room.cond:
-                while not ([m for m in room.msgs[after:] if m["who"] != seat] or room.meta.get("closed")):
+                while not ([m for m in room.msgs[after:] if m["who"] != seat and (seat != HELPER or calls_helper(m))]
+                           or room.meta.get("closed")):
                     left = end - time.time()
                     if left <= 0:
                         break
@@ -1813,7 +1876,7 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, {"ok": True, "auto": on})
                 if act == "lead":
                     s = b.get("seat") or ""
-                    if (s and s not in SEATS) or r.meta.get("closed"):
+                    if (s and s not in SEATS) or s == HELPER or r.meta.get("closed"):
                         return self._send(400, {"error": "invalid seat or meeting closed"})
                     if s and not r.meta.get("worktree"):
                         try:
@@ -1895,9 +1958,11 @@ class H(BaseHTTPRequestHandler):
         if not os.path.isdir(proj):
             return self._send(400, {"error": f"folder not found / 找不到資料夾: {proj}"})
         lead, mode = b.get("lead") or "", b.get("mode") or "discuss"
-        if lead not in ("", *SEATS) or mode not in ("discuss", "review") or lang not in LANGS:
+        if lead not in ("", *SEATS) or lead == HELPER or mode not in ("discuss", "review") or lang not in LANGS:
             return self._send(400, {"error": "invalid lead, mode or language"})
         seats = [x for x in (b.get("seats") or []) if x in SEATS]
+        if HELPER_REQUIRED and HELPER not in seats and find_claude():
+            seats.append(HELPER)
         given = {k: v for k, v in clean_cfg(b.get("seat_cfg")).items() if k in (b.get("seat_cfg") or {})}
         seat_cfg = {**{k: v for k, v in last_models().items() if k in SEATS}, **given}
         remember_models({k: v for k, v in given.items() if k in seats})

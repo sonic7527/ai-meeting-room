@@ -5,14 +5,14 @@
 :root{
   --bg:#f4f3ef; --panel:#fbfaf7; --ink:#1c2026; --ink-2:#454c57; --ink-3:#757c87; --hair:#d9d6cd;
   --me:#2b5797; --me-bg:#e3eaf6; --Claude:#b0532c; --Claude-bg:#f6e8df; --GPT:#12775a; --GPT-bg:#dff0e8;
-  --Gemini:#5b4bc4; --Gemini-bg:#e9e6fa; --sys:#6d6a62; --sum:#7a5a12; --sum-bg:#f6edd2; --danger:#b3362b; --warn:#b26b00;
+  --Gemini:#5b4bc4; --Gemini-bg:#e9e6fa; --Helper:#5f6b3a; --Helper-bg:#ebeedd; --sys:#6d6a62; --sum:#7a5a12; --sum-bg:#f6edd2; --danger:#b3362b; --warn:#b26b00;
   --f:system-ui,-apple-system,"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#16181c; --panel:#1e2126; --ink:#ecebe7; --ink-2:#c3c6cc; --ink-3:#8e939c; --hair:#323740;
   --me:#9dbcf2; --me-bg:#1c2638; --Claude:#f0a57f; --Claude-bg:#2e221c; --GPT:#6fd6ae; --GPT-bg:#16291f;
-  --Gemini:#b3a8ff; --Gemini-bg:#221f38; --sys:#9a978f; --sum:#e8c877; --sum-bg:#2b2515; --danger:#f08378; --warn:#f0b65c;
+  --Gemini:#b3a8ff; --Gemini-bg:#221f38; --Helper:#c5d394; --Helper-bg:#22261a; --sys:#9a978f; --sum:#e8c877; --sum-bg:#2b2515; --danger:#f08378; --warn:#f0b65c;
   color-scheme:dark}}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -79,6 +79,7 @@ header h2{margin:0;font-size:20px;flex:1 1 260px;min-width:0}
 .m-Claude .who{color:var(--Claude)} .m-Claude .body{background:var(--Claude-bg)}
 .m-GPT .who{color:var(--GPT)} .m-GPT .body{background:var(--GPT-bg)}
 .m-Gemini .who{color:var(--Gemini)} .m-Gemini .body{background:var(--Gemini-bg)}
+.m-Helper .who{color:var(--Helper)} .m-Helper .body{background:var(--Helper-bg)}
 .m-user{align-self:flex-end;align-items:flex-end} .m-user .who{color:var(--me)}
 .m-user .body{background:var(--me-bg);border-radius:14px 4px 14px 14px}
 .m-system{align-self:center;max-width:100%} .m-system .meta{display:none}
@@ -256,7 +257,7 @@ const I18N={
    modeL:"Meeting type",langL:"Meeting language",inviteL:"Invite now (optional — you can also invite later)",leadL:"Lead",topicL:"Topic (background, constraints, what to decide)",
    topicPh:"Write down the constraints you have already decided; the AIs will follow them.",cancel:"Cancel",start:"Start meeting",apply:"Apply",
    modelsNote:"Only the AI you change rejoins with the new model; it reads the earlier messages and continues.",
-   model:"Model",effort:"Reasoning effort",dflt:"default",latestVer:"now",pinnedVer:"fixed version",notInstalled:"Not installed",notSigned:"Not signed in",
+   model:"Model",effort:"Reasoning effort",dflt:"default",latestVer:"now",pinnedVer:"fixed version",notInstalled:"Not installed",helper:"Helper",helperNote:"Joins every meeting (a cheaper Claude for repetitive work: renders, side-by-sides, checks); acts only when called with @Helper.",notSigned:"Not signed in",
    allowBtn:"Allow meeting tools",allowNote:"Antigravity CLI runs in the background and cannot ask for permission. This adds one rule to its settings that allows only the meeting-room tools.",
    modes:{discuss:"Discussion",review:"Code review"},equal:"No lead — equal discussion (all read-only)",leads:n=>n+" leads (edits code in an isolated git copy)",
    state:{listening:"listening",thinking:"working",away:"away"},busyMin:m=>` ${m} min`,autoOffSure:"Turn off autonomous mode? The AIs will stop after {n} messages in a row and wait for you.",host:"Host",system:"System",
@@ -284,7 +285,7 @@ const I18N={
    modeL:"會議類型",langL:"會議語言",inviteL:"現在就邀請(可不選,開會後再邀請)",leadL:"誰當主審",topicL:"議題說明(背景、限制、要討論出什麼)",
    topicPh:"把你已經決定的限制寫清楚,AI 會照著討論。",cancel:"取消",start:"開會",apply:"套用",
    modelsNote:"只有改到的那位 AI 會換新模型重新入席,並讀完前面的紀錄接著討論。",
-   model:"模型",effort:"思考深度",dflt:"預設",latestVer:"目前",pinnedVer:"固定版本",notInstalled:"未安裝",notSigned:"尚未登入",
+   model:"模型",effort:"思考深度",dflt:"預設",latestVer:"目前",pinnedVer:"固定版本",notInstalled:"未安裝",helper:"助手",helperNote:"每場會議都會入席(較便宜的 Claude,做批次算圖、並排片、跑檢查這類重複工作),只在有人寫「@助手」點名時才動作。",notSigned:"尚未登入",
    allowBtn:"允許會議室工具",allowNote:"Antigravity 命令列程式在背景執行時無法跳出詢問,需要在它的設定裡加一條規則,只允許會議室的工具。",
    modes:{discuss:"討論",review:"互相檢查程式碼"},equal:"平等討論(大家都只能看)",leads:n=>n+" 主審(在獨立副本改程式)",
    state:{listening:"在聽",thinking:"工作中",away:"不在席"},busyMin:m=>` ${m} 分鐘`,autoOffSure:"確定關閉自主會議?關閉後 AI 連續發言 {n} 則就會停下來等你。",host:"主持人",system:"系統",
@@ -299,7 +300,7 @@ const I18N={
    briefL:"議題",sayShort:"以主持人身分發言…",gripTip:"拖拉調整議題區高度(按上方標題列可收合)"}};
 const EFF={en:{"":"default",low:"low",medium:"medium",high:"high",xhigh:"x-high",max:"max",ultra:"ultra"},
   "zh-TW":{"":"預設",low:"低",medium:"中",high:"高",xhigh:"更高",max:"最高",ultra:"極限"}};
-const ALL=["Claude","GPT","Gemini"];
+const ALL=["Claude","GPT","Gemini","Helper"];
 const $=id=>document.getElementById(id);
 let LANG=(navigator.language||"").startsWith("zh")?"zh-TW":"en";
 try{const saved=localStorage.getItem("amr-lang");if(saved in I18N)LANG=saved;}catch(e){}
@@ -351,7 +352,7 @@ async function loadList(){
   const top=list.scrollTop;list.replaceChildren(box);list.scrollTop=top;
 }
 
-function whoName(w){return w==="user"?L().host:w==="system"?L().system:w;}
+function whoName(w){return w==="user"?L().host:w==="system"?L().system:w==="Helper"?L().helper:w;}
 function add(m){
   const log=$("log");if(log.querySelector(".empty"))log.textContent="";
   const box=document.createElement("div");box.className="msg m-"+m.who;
@@ -389,19 +390,19 @@ function add(m){
 }
 function refreshAcks(){
   document.querySelectorAll(".ack").forEach(a=>{const q=+a.dataset.seq;a.textContent="";
-    for(const s of curSeats){const ok=(SEQS[s]||[]).some(x=>x>q);const sp=document.createElement("span");sp.className=ok?"ok":"wait";sp.textContent=s+(ok?L().replied:L().pending);a.appendChild(sp);}});
+    for(const s of curSeats){if(s==="Helper")continue;const ok=(SEQS[s]||[]).some(x=>x>q);const sp=document.createElement("span");sp.className=ok?"ok":"wait";sp.textContent=whoName(s)+(ok?L().replied:L().pending);a.appendChild(sp);}});
 }
 function renderSeats(j){
   const box=$("seats");box.textContent="";
   for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
     const i=document.createElement("i");const sm=document.createElement("small");const us=(j.usage||{})[s];
     sm.textContent=j.labels[s]+(us?" · "+us.line:"");if(us){sm.title=us.tip;if(us.high)sm.style.color="var(--warn)";}
-    const _bs=(j.busy_sec||{})[s];el.append(i,document.createTextNode(s+" · "+L().state[j.seats[s]]+(j.seats[s]==="thinking"&&_bs>=60?L().busyMin(Math.floor(_bs/60)):"")+" "),sm);
-    if(!j.meta.closed){const isLead=(j.meta.lead||"")===s;const op=document.createElement("button");op.type="button";
+    const _bs=(j.busy_sec||{})[s];el.append(i,document.createTextNode(whoName(s)+" · "+L().state[j.seats[s]]+(j.seats[s]==="thinking"&&_bs>=60?L().busyMin(Math.floor(_bs/60)):"")+" "),sm);
+    if(!j.meta.closed&&s!=="Helper"){const isLead=(j.meta.lead||"")===s;const op=document.createElement("button");op.type="button";
       op.className="opbtn"+(isLead?" on":"");op.textContent=isLead?L().operating:L().operate;op.title=isLead?L().operateOff:L().operateTip;
       op.onclick=async()=>{op.disabled=true;try{await post(R(cur)+"/lead",{seat:isLead?"":s});await open(cur);}catch(e){$("note").textContent=e.message;op.disabled=false;}};
       el.appendChild(op);}
-    if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent="×";x.title=L().leave;x.setAttribute("aria-label",s+" "+L().leave);
+    if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent="×";x.title=L().leave;x.setAttribute("aria-label",whoName(s)+" "+L().leave);
       x.onclick=async()=>{x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
     box.appendChild(el);}
   if(!curSeats.length&&!j.meta.closed){const h=document.createElement("span");h.className="noseat";h.textContent=L().noSeats;box.appendChild(h);}
@@ -548,10 +549,12 @@ function seatPicker(s,cfg,withCheck,agent){
   const M=MODELS[s],fs=document.createElement("fieldset");fs.dataset.seat=s;
   const lg=document.createElement("legend");
   if(withCheck){const lb=document.createElement("label");lb.className="chk";const cb=document.createElement("input");cb.type="checkbox";cb.className="inv";
-    cb.checked=false;cb.disabled=!(agent&&agent.installed);fs.classList.add("off");lb.append(cb,document.createTextNode(" "+s));lg.appendChild(lb);
-    cb.onchange=()=>{fs.classList.toggle("off",!cb.checked);syncLead();};}
-  else lg.textContent=s;
+    cb.checked=false;cb.disabled=!(agent&&agent.installed);fs.classList.add("off");lb.append(cb,document.createTextNode(" "+whoName(s)));lg.appendChild(lb);
+    cb.onchange=()=>{fs.classList.toggle("off",!cb.checked);syncLead();};
+    if(s==="Helper"&&M.required&&agent&&agent.installed){cb.checked=true;cb.disabled=true;fs.classList.remove("off");}}
+  else lg.textContent=whoName(s);
   fs.appendChild(lg);
+  if(s==="Helper"){const p=document.createElement("p");p.className="hint";p.textContent=L().helperNote;fs.appendChild(p);}
   if(withCheck&&!(agent&&agent.installed)){fs.classList.add("off");const p=document.createElement("p");p.className="hint";p.textContent=L().notInstalled+" — "+agent.hint;fs.appendChild(p);return fs;}
   if(withCheck&&agent&&!agent.signed_in){const p=document.createElement("p");p.className="hint";p.textContent=L().notSigned+" — "+agent.hint;fs.appendChild(p);}
   if(withCheck&&agent&&agent.needs_allow){const cb=fs.querySelector("input.inv");cb.checked=false;cb.disabled=true;fs.classList.add("off");
@@ -574,7 +577,7 @@ function seatPicker(s,cfg,withCheck,agent){
 function readPickers(box){const out={};box.querySelectorAll("fieldset").forEach(fs=>{const m=fs.querySelector("select.m"),e=fs.querySelector("select.e");
   if(m)out[fs.dataset.seat]={model:m.value,effort:e&&!e.hidden?e.value:""};});return out;}
 function invited(){return[...$("invite").querySelectorAll("fieldset")].filter(fs=>{const c=fs.querySelector("input.inv");return c&&c.checked;}).map(fs=>fs.dataset.seat);}
-function syncLead(){const keep=$("f-lead").value;opt($("f-lead"),[["",L().equal]].concat(invited().map(s=>[s,L().leads(s)])),keep);}
+function syncLead(){const keep=$("f-lead").value;opt($("f-lead"),[["",L().equal]].concat(invited().filter(s=>s!=="Helper").map(s=>[s,L().leads(s)])),keep);}
 
 $("newBtn").onclick=async()=>{
   $("f-err").textContent="";$("f-lang").value=LANG;

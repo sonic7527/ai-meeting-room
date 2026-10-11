@@ -10,6 +10,7 @@
 - **像聊天軟體一樣好用**:在任何一則訊息上按右鍵可以回覆它、一鍵 ✕ 否決或 ✓ 採用;Enter 送出、Shift+Enter 換行。
 - **樣板直接貼在對話裡**:AI 可以把單一網頁檔跟著發言一起貼上,直接嵌在對話裡,動畫、按鈕、拖曳都能操作,不用另外開網址。
 - **同一個專案、同一套背景**:選一個資料夾,每位 AI 發言前都先讀同樣的專案說明檔(CLAUDE.md、AGENTS.md、GEMINI.md、README)。
+- **第四席「助手」**:每場會議自動多一位較便宜的 Claude(預設 Sonnet,可在設定改成 Haiku 省額度,會議中也能換模型)。它不規劃、不判斷好壞,只在有人寫「@助手」點名時做重複的動手工作(批次算圖、組並排片、抽格、跑檢查腳本),其他 AI 就能專心攻難的部分。沒被點名時不會被叫醒、不佔額度;它的發言也不算進「AI 連講幾則就暫停」的次數。
 - **主審與輔助**:可以指定一位 AI 當主審,所有改程式和 git 提交都由它做,而且**只在專案外的 git 獨立副本裡做**;其他 AI 負責檢查、做主審指派的唯讀工作。
 - **每位 AI 可以各自選模型和思考深度**,會議中也能換,而且會記住你上次的選擇。
 - **可以同時開好幾場會議**,每場一個瀏覽器分頁;舊會議可以從清單刪除。
@@ -107,7 +108,7 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 ## 設定
 
 可以設環境變數,或在 `hub.py` 旁邊放一個 `config.json`(不會進 git),例如
-`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`auto_run_limit`、`allowed_origins`、`image_max_mb`、`media_max_mb`、`seat_path`(AI 席位啟動時加到搜尋路徑最前面的資料夾清單;GPT 在 Windows 沙盒裡讀不到使用者資料夾下的程式,例如 winget 裝的 ffmpeg,可以把工具放到沙盒讀得到的資料夾再列在這裡)。`seat_mcp`:額外接到 Claude 與 GPT 席位的 MCP 工具,格式同 Claude Code 的 mcpServers(例如 Blender 的 MCP,讓 Claude 在會議裡直接操作開著的 Blender),席位會自動允許這些工具。兩者都有時以環境變數為準。
+`{"lang": "zh-TW", "host_name": "站長"}`。可用的鍵:`host_name`、`lang`、`port`、`project`、`home`、`export_dir`、`ai_run_limit`、`auto_run_limit`、`allowed_origins`、`image_max_mb`、`media_max_mb`、`seat_path`(AI 席位啟動時加到搜尋路徑最前面的資料夾清單;GPT 在 Windows 沙盒裡讀不到使用者資料夾下的程式,例如 winget 裝的 ffmpeg,可以把工具放到沙盒讀得到的資料夾再列在這裡)。`helper`:新會議是否自動加入助手席(預設 `true`);`helper_model`:助手席預設模型(預設 `sonnet`,重複工作可設 `haiku`)。`seat_mcp`:額外接到 Claude 與 GPT 席位的 MCP 工具,格式同 Claude Code 的 mcpServers(例如 Blender 的 MCP,讓 Claude 在會議裡直接操作開著的 Blender),席位會自動允許這些工具。兩者都有時以環境變數為準。
 
 附件:圖片和網頁檔上限 `image_max_mb`(預設 32 MB),影片和音樂(mp4、webm、mov、mp3、m4a、wav)上限 `media_max_mb`(預設 4096 MB)。檔案會切成 8 MB 一塊分批上傳,手機或遠端連線中途斷掉會自動重試、從斷掉的地方接著傳,畫面顯示上傳進度。發言送出若網路不穩(手機常見),會自動重試最多 4 次;同一則重送時伺服器會認出來,不會重複貼出,全部失敗才保留原文並提示再按一次。主持人可以按 📎、把檔案拖進發言欄,或直接貼上;影片在網頁裡直接播放、可以拖進度條。散會時影音檔留在會議室自己的資料夾,不會複製進你的專案。AI 看得到你貼的附件:每則訊息會附上檔案路徑,圖片它們直接打開看;影片則由會議室平均抽 12 張關鍵畫面(要裝 ffmpeg)加上影片長度給它們看。
 

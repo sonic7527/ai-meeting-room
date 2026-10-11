@@ -33,7 +33,7 @@ Use the first folder containing `hub.py`: `$AI_MEETING_ROOM_DIR`, then `~/ai-mee
 - `lang`: `en` or `zh-TW`, matching the user's language.
 - `mode`: `discuss` (default) or `review` when the user wants code checked.
 - `lead`: `""` (equal discussion, everyone read-only, default) or the AI the user names as lead. The lead edits code in an isolated git worktree outside the project; push / deploy need the user's yes.
-- `seats`: **leave it out by default** — the meeting starts empty and the user clicks Invite in the page. Fill it only when the user names the AIs (e.g. "meet with GPT and Gemini").
+- `seats`: **leave it out by default** — the meeting starts with only the auto-joined helper (a fourth, cheaper Claude seat that does batch renders, side-by-sides and checks only when called with "@Helper"); the user clicks Invite in the page for the others. Fill it only when the user names the AIs (e.g. "meet with GPT and Gemini").
 - `seat_cfg`: **only if the user asked for specific models.** Otherwise omit (the room reuses the user's last choices).
 
 ## 4. Create the meeting and open the tab
