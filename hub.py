@@ -937,6 +937,9 @@ def start_seat(room, seat, restart=False):
             extra = ["--add-dir", work] + (["--add-dir", room.meta["git_common"]] if room.meta.get("git_common") else [])
         else:
             root, extra = work, []
+        # 2026-10-09 站長 720:GPT 也要能自己試做 UE → 額外可寫資料夾(例如 D:/ue_gpt_mv3),由環境變數 MEETING_GPT_DIRS 給
+        for d in [x for x in os.environ.get("MEETING_GPT_DIRS", "").split(os.pathsep) if x]:
+            extra += ["--add-dir", d]
         args = [exe, "exec", "--skip-git-repo-check", "-C", root, *extra, "-s", "workspace-write",
                 "-c", f'mcp_servers.meeting.url="{url}"',
                 "-c", "mcp_servers.meeting.tool_timeout_sec=300", "-c", "tools.web_search=true",
@@ -1789,7 +1792,10 @@ class H(BaseHTTPRequestHandler):
                     with r.cond:
                         if cid and cid in r.cids:
                             return self._send(200, r.cids[cid])
-                        m = r.add("user", text, files)
+                        who = str(b.get("who") or "user")[:32]   # 2026-10-09 站長:後台代發的訊息要能被站長讚成／否決／回覆 → 允許指定發言者名稱(例如「後台」),不當成站長本人
+                        if who in SEATS or who == "system" or not who.strip():
+                            who = "user"
+                        m = r.add(who, text, files)
                         if cid:
                             r.cids[cid] = m
                     return self._send(200, m)
