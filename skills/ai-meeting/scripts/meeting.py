@@ -19,11 +19,13 @@ def main():
     p.add_argument('--base', required=True)
     sub = p.add_subparsers(dest='cmd', required=True)
     sub.add_parser('rooms')
-    for cmd in ('read', 'say', 'watch'):
+    for cmd in ('read', 'say', 'watch', 'snapshot'):
         q = sub.add_parser(cmd)
         q.add_argument('room')
         if cmd == 'say':
             q.add_argument('--file', required=True)
+        elif cmd == 'snapshot':
+            q.add_argument('--out', required=True)
         else:
             q.add_argument('--after', type=int, default=0)
         if cmd == 'watch':
@@ -37,7 +39,27 @@ def main():
         result = request(base, '/api/rooms')
     else:
         path = '/api/rooms/' + urllib.parse.quote(a.room, safe='') + '/messages'
-        if a.cmd == 'say':
+        if a.cmd == 'snapshot':
+            data = request(base, path + '?after=0')
+            output = Path(a.out).expanduser()
+            output.mkdir(parents=True, exist_ok=True)
+            messages = data.get('messages', [])
+            cursor = {'base': base, 'room': a.room, 'last_seq': data['last_seq'],
+                      'message_count': len(messages)}
+            transcript = '# ' + data.get('meta', {}).get('title', a.room) + '\n\n'
+            for msg in messages:
+                transcript += '## #' + str(msg['seq']) + ' ' + msg['who'] + ' ' + msg.get('at', '') + '\n\n' + msg['text'] + '\n\n'
+                if msg.get('imgs'):
+                    transcript += 'Attachments: ' + ', '.join(msg['imgs']) + '\n\n'
+            files = {'room_snapshot.json': json.dumps(data, ensure_ascii=False, indent=2),
+                     'transcript.md': transcript,
+                     'cursor.json': json.dumps(cursor, ensure_ascii=False, indent=2)}
+            for name, content in files.items():
+                temp = output / (name + '.tmp')
+                temp.write_text(content, encoding='utf-8')
+                temp.replace(output / name)
+            result = {'snapshot_dir': str(output.resolve()), **cursor}
+        elif a.cmd == 'say':
             content = Path(a.file).read_text(encoding='utf-8-sig').strip()
             if not content:
                 p.error('message file is empty')

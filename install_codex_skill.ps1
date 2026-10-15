@@ -6,7 +6,7 @@ if (-not $SkillsDir) {
 }
 $source = Join-Path $PSScriptRoot 'skills\ai-meeting'
 $target = Join-Path $SkillsDir 'ai-meeting'
-$files = @('SKILL.md', 'scripts\meeting.py')
+$files = @('SKILL.md', 'scripts\meeting.py', 'references\host-handoff.md')
 foreach ($relative in $files) {
     if (-not (Test-Path -LiteralPath (Join-Path $source $relative) -PathType Leaf)) {
         throw "Missing skill source: $relative"
