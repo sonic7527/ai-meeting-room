@@ -500,6 +500,13 @@ async function send(){
   $("send").disabled=closed;
 }
 async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
+// 2026-10-27 站長：評分頁要能一鍵送分。附件網頁在 sandbox 裡不能直接發言，改成把分數文字填進下方輸入框，站長自己按送出
+// （只收會議裡附件框送來、開頭「【評分】」的文字，網頁不能替站長發言）
+addEventListener("message",e=>{const d=e.data;if(!d||d.type!=="meeting-rating"||typeof d.text!=="string")return;
+  if(![...document.querySelectorAll(".page iframe")].some(f=>f.contentWindow===e.source))return;
+  const t=d.text.trim();if(!t.startsWith("【評分】")||t.length>2000||closed)return;
+  const s=$("say");s.value=t;s.focus();s.scrollIntoView({block:"center"});
+  try{e.source.postMessage({type:"meeting-rating-ok"},"*");}catch(err){}});
 function copyText(t){   // 手機或非安全連線時 navigator.clipboard 可能不能用，退回 execCommand
   const fb=()=>{const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(err){}ta.remove();};
   try{navigator.clipboard.writeText(t).catch(fb);}catch(err){fb();}}
