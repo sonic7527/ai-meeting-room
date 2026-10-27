@@ -246,7 +246,7 @@ const I18N={
    closeSure:"Close? Click again",emptyLog:"Messages from you and the AIs will appear here.",send:"Send",say:"Speak as the host… (Enter to send, Shift+Enter for a new line; right-click a message to reply)",
    titleL:"Title",projL:"Project (every AI reads the same folder)",other:"Other folder…",otherPh:"Full path, e.g. /home/me/my-project",
    enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
-   reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
+   reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",copySel:"Copy selection",replyTo:"Replying to",attachment:"(attachment)",
    attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",
    operate:"Operate",operating:"★ Operating",operateTip:"Let this AI run programs and edit files in an isolated copy of the project",operateOff:"Click to clear the assignment",uploading:"Uploading",uploadFail:"Upload failed",sending:"Sending…",sendFail:"Not sent (your text is kept, press Send again)",
    vetoText:"✕ Rejected this version (no need to revise or reply yet; wait until I have looked at the others).",adoptText:"✓ Adopted.",
@@ -274,7 +274,7 @@ const I18N={
    closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Enter 送出、Shift+Enter 換行;在訊息上按右鍵可回覆)",
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
    enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
-   reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
+   reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",copySel:"複製選取",replyTo:"回覆",attachment:"(附件)",
    attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",
    operate:"指派操作",operating:"★ 操作中",operateTip:"讓這位 AI 在專案的獨立副本裡跑程式、改檔",operateOff:"按一下取消指派",uploading:"上傳中",uploadFail:"上傳失敗",sending:"送出中…",sendFail:"沒送出去(原文還在,請再按一次送出)",
    vetoText:"✕ 否決這版(先不用改、不用回覆,等我看完其他版本再說)。",adoptText:"✓ 採用。",
@@ -496,10 +496,12 @@ async function send(){
 }
 async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
 function openCtx(e,m){const c=$("ctx");c.textContent="";
+  const sel=getSelection(),box=e.currentTarget;
+  const picked=sel&&!sel.isCollapsed&&box.contains(sel.anchorNode)&&box.contains(sel.focusNode)?sel.toString().trim():"";
   const item=(label,fn)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.onclick=()=>{c.hidden=true;fn();};c.appendChild(b);};
   item("↩ "+L().reply,()=>startReply(m));
   if(m.who!=="user"){item("✕ "+L().veto,()=>react(m,"veto"));item("✓ "+L().adopt,()=>react(m,"adopt"));}
-  item("⧉ "+L().copy,()=>{try{navigator.clipboard.writeText(m.text);}catch(err){}});
+  item("⧉ "+(picked?L().copySel:L().copy),()=>{try{navigator.clipboard.writeText(picked||m.text);}catch(err){}});
   c.hidden=false;const w=c.offsetWidth,h=c.offsetHeight;
   c.style.left=Math.min(e.clientX,innerWidth-w-8)+"px";c.style.top=Math.min(e.clientY,innerHeight-h-8)+"px";}
 document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").hidden=true;});
