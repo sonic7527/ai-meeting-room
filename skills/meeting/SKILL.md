@@ -7,6 +7,10 @@ description: Start an AI meeting with the user plus Claude, GPT and/or Gemini (w
 
 One command, three results: the room is running, the meeting exists, a new Chrome tab shows it. Do not ask the user to confirm details; take them from what they said and use defaults for the rest.
 
+## Resume or hand off hosting
+
+When asked to resume hosting or hand off between Claude Code and Codex, locate the install folder below and read `<folder>/skills/ai-meeting/references/host-handoff.md`. Verify the existing room, read the latest handoff and subsequent messages, then acknowledge takeover in the meeting. Preserve user instructions, message cursor, pending verification and each seat's assignment. One host coordinates at a time; changing hosts does not expand permissions. Put essential cross-host handoff content in the shared meeting, not only an inaccessible local path. Keep private transcripts out of public Git. Do not start a new meeting merely to resume one.
+
 ## 1. Find the install folder
 
 Use the first folder containing `hub.py`: `$AI_MEETING_ROOM_DIR`, then `~/ai-meeting-room`.

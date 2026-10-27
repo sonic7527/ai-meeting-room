@@ -552,14 +552,22 @@ def find_claude():
     if w:
         return w
     if IS_WIN:
-        base = os.path.join(os.environ.get("APPDATA", ""), "Claude", "claude-code")
-        c = glob.glob(os.path.join(base, "*", "claude.exe")) + glob.glob(os.path.join(base, "*", "*", "claude.exe"))
+        bases = [os.path.join(os.environ.get("APPDATA", ""), "Claude", "claude-code")]
+        packages = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Packages")
+        bases += [os.path.join(p, "LocalCache", "Roaming", "Claude", "claude-code")
+                  for p in glob.glob(os.path.join(packages, "Claude_*"))]
+        bases += [os.path.join(p, "claude-code") for p in
+                  glob.glob(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Claude-Data", "claude_*"))]
+        c = [os.path.expanduser("~/.local/bin/claude.exe")]
+        for base in bases:
+            c += glob.glob(os.path.join(base, "*", "claude.exe"))
+            c += glob.glob(os.path.join(base, "*", "*", "claude.exe"))
     else:
         base = os.path.expanduser("~/Library/Application Support/Claude/claude-code")
         c = glob.glob(os.path.join(base, "*", "claude")) + glob.glob(os.path.join(base, "*", "*", "claude")) + \
             glob.glob(os.path.expanduser("~/.claude/local/claude"))
+    c = [p for p in c if os.path.isfile(p)]
     return max(c, key=_ver) if c else None
-
 
 def find_gemini():
     if os.environ.get("AGY_BIN"):

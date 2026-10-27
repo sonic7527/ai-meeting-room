@@ -136,6 +136,21 @@ Claude 席位只讀專案共用的設定(`--setting-sources project`),你個人�
 - **Windows 上的微軟商店版 Python**:商店版在隔離環境裡執行,它叫起來的 AI 會一啟動就結束(錯誤訊息「Broken pipe」),寫的檔案也會被轉存到私人資料夾。`start_bg.ps1` 現在會在有其他 Python 3.9 以上時跳過它;也可以設 `MEETING_PYTHON` 自己指定。
 - **PowerShell 顯示「已停用指令碼執行」**:把 `npm` 改打成 `npm.cmd`。
 
+## Codex 主持與跨電腦更新
+
+Codex 可使用同一個會議室主持討論：具名發言、讀取增量訊息、等待成果並協調各席位。Windows 安裝或更新技能：
+
+```powershell
+git -C "$HOME/ai-meeting-room" pull --ff-only
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME/ai-meeting-room/install_codex_skill.ps1"
+```
+
+安裝到 `$CODEX_HOME/skills/ai-meeting`（未設定時為 `~/.codex/skills/ai-meeting`），替換既有版本前備份不同的檔案。更新後，若既有聊天未發現新技能，開新聊天或重新載入 Codex。之後說「開會，討論某題，找 Claude 和 Gemini」即可由 Codex 協調、使用者拍板。詳細流程見 [主持技能](skills/ai-meeting/SKILL.md)。
+
+技能更新不需要重啟會議室。更新會議室程式則需重新啟動才生效；若有進行中的會議，等散會後再重啟。
+
+Git 同步程式與技能，不同步 Codex 聊天歷史。要在兩台電腦接續同一個聊天，使用 Codex 的遠端連線或交接功能。私人會議室網址放環境變數 `MEETING_URL` 或各機 `~/.ai-meeting-hosts.json`，不提交到版本庫。
+
 ## 授權
 
 MIT
