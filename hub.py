@@ -29,7 +29,7 @@ def _load_local_config():
                      ("project", "MEETING_PROJECT"), ("home", "MEETING_HOME"), ("export_dir", "MEETING_EXPORT_DIR"),
                      ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("auto_run_limit", "MEETING_AUTO_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
                      ("media_max_mb", "MEETING_MEDIA_MAX_MB"), ("helper", "MEETING_HELPER"),
-                     ("helper_model", "MEETING_HELPER_MODEL")):
+                     ("helper_model", "MEETING_HELPER_MODEL"), ("lead_direct", "MEETING_LEAD_DIRECT")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
     if cfg.get("seat_path") and not os.environ.get("MEETING_SEAT_PATH"):
@@ -57,7 +57,7 @@ EXPORT_SUBDIR = os.environ.get("MEETING_EXPORT_DIR", os.path.join("docs", "meeti
 PORT = int(os.environ.get("MEETING_PORT", "7720"))
 ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in os.environ.get("MEETING_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 DEFAULT_LANG = os.environ.get("MEETING_LANG", "en")
-SEATS = ("Claude", "GPT", "Gemini", "Helper")
+SEATS = ("Claude", "GPT", "Gemini", "Helper", "GPT2")   # 2026-10-14 站長:Claude 額度不夠時多開一席 GPT
 # 2026-10-11 站長:第四席「助手」= 另一個 Claude(預設 Sonnet),不規劃、不驗收,只照其他席位或主持人的點名做重複工作
 # (批次算圖、組片、跑檢查),讓主力專心。新會議一律自動入席(config "helper": false 可關)。
 HELPER = "Helper"
@@ -88,9 +88,11 @@ IMG_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 PAGE_EXT = {".html", ".htm"}
 MEDIA_EXT = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
              ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav"}
+# 瀏覽器不一定能播的影片格式：收下來後用 ffmpeg 轉成 mp4 再貼出（手機、相機、行車紀錄器常見格式）
+CONVERT_EXT = {".avi", ".mkv", ".3gp", ".3g2", ".m4v", ".wmv", ".mts", ".m2ts", ".ts", ".flv", ".mpg", ".mpeg", ".vob"}
 ATTACH_MAX = int(float(os.environ.get("MEETING_IMAGE_MAX_MB", "32")) * 1024 * 1024)
 MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "4096")) * 1024 * 1024)
-ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT)
+ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT) | CONVERT_EXT
 UPLOADS, UPLOADS_DONE, UPLOADS_LOCK = {}, {}, threading.Lock()
 
 
@@ -110,6 +112,38 @@ VIDEO_EXT = {".mp4", ".webm", ".mov"}
 FRAMES_N = 12
 
 
+def _tool(name):
+    """先找系統 PATH，再找 config.json 的 seat_path（ffmpeg 常裝在那裡，會議室本身原本找不到）"""
+    p = shutil.which(name)
+    if p:
+        return p
+    for d in (os.environ.get("MEETING_SEAT_PATH") or "").split(os.pathsep):
+        for cand in (os.path.join(d, name + ".exe"), os.path.join(d, name)):
+            if d and os.path.isfile(cand):
+                return cand
+    return None
+
+
+def to_mp4(room, fn):
+    """把 CONVERT_EXT 的影片轉成 mp4（H.264＋AAC，手機瀏覽器都能播），成功回傳新檔名、刪掉原檔。"""
+    src = os.path.join(room.dir, fn)
+    ff = _tool("ffmpeg")
+    if not ff:
+        os.remove(src)
+        raise RuntimeError("這種影片要先轉成 mp4 才能播放，但這台電腦找不到 ffmpeg；請改傳 mp4／mov")
+    new = os.path.splitext(fn)[0] + ".mp4"
+    dst = os.path.join(room.dir, new)
+    r = subprocess.run([ff, "-v", "error", "-y", "-i", src, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", dst],
+                       capture_output=True, text=True, timeout=3600, creationflags=NO_WINDOW)
+    os.remove(src)
+    if r.returncode != 0 or not os.path.isfile(dst) or os.path.getsize(dst) == 0:
+        if os.path.isfile(dst):
+            os.remove(dst)
+        raise RuntimeError("影片轉檔失敗，請改傳 mp4／mov：" + (r.stderr or "").strip()[-200:])
+    return new
+
+
 def frames_dir(room, f):
     return os.path.join(room.dir, ".frames", f)
 
@@ -117,7 +151,7 @@ def frames_dir(room, f):
 def make_frames(room, f):
     src = os.path.join(room.dir, f)
     out = frames_dir(room, f)
-    ff, fp = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    ff, fp = _tool("ffmpeg"), _tool("ffprobe")
     if not ff or not fp or os.path.isdir(out):
         return
     os.makedirs(out, exist_ok=True)
@@ -157,7 +191,7 @@ def attach_info(room, f):
 
 def size_ok(path_or_size, ext):
     n = path_or_size if isinstance(path_or_size, int) else os.path.getsize(path_or_size)
-    return n <= (MEDIA_MAX if ext in MEDIA_EXT else ATTACH_MAX)
+    return n <= (MEDIA_MAX if ext in MEDIA_EXT or ext in CONVERT_EXT else ATTACH_MAX)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LANGS = ("en", "zh-TW")
 
@@ -173,6 +207,7 @@ T = {
         "leads": {"": "Equal discussion (all read-only)", "Claude": "Claude leads, GPT assists",
                   "GPT": "GPT leads, Claude assists"},
         "start": "Meeting started: {title} (project {project} · {mode} · {lead})",
+        "worktree_direct": "The lead edits the project folder {path} directly (branch {branch}). Every change is committed with git, so it can be rolled back.",
         "worktree": "Lead's isolated copy: {path} (branch {branch}). The main project folder is never touched; "
                     "the host decides whether to merge it back.",
         "closed": "The host closed the meeting. Both AIs are leaving.",
@@ -210,7 +245,7 @@ T = {
         "closed_no_speak": "The meeting is closed. You can no longer speak.",
         "empty": "The message is empty.",
         "bad_image": "Attachment not found, too large (images/pages {img_mb} MB, video/audio {media_mb} MB max) or "
-                     "unsupported (png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav): {p}",
+                     "unsupported (png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav; avi/mkv/3gp/m4v/wmv/mts/ts/flv/mpg are converted to mp4): {p}",
         "no_new": "No new messages. Call wait_for_messages again.",
         "run_left": "You may post {left} more message(s) in a row before waiting for the {host} (current limit {n}; the limit changes when autonomous mode is turned on or off).",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
@@ -242,6 +277,7 @@ T = {
         "leads": {"": "平等討論(大家都只能看)", "Claude": "Claude 主審、GPT 輔助", "GPT": "GPT 主審、Claude 輔助"},
         "start": "會議開始:{title}(專案 {project}・{mode}・{lead})",
         "worktree": "主審的獨立副本:{path}(分支 {branch})。主資料夾不會被改到;要不要合併回來由{host}決定。",
+        "worktree_direct": "主審直接在專案資料夾 {path} 改檔(分支 {branch})。每次改動都會 git 提交,要退回可以照提交紀錄還原。",
         "closed": "{host}宣布散會,AI 退場。",
         "exported": "會議紀錄已存到:{path}",
         "export_fail": "會議紀錄匯出失敗:{err}",
@@ -272,7 +308,7 @@ T = {
         "closed_no_speak": "已散會,不能再發言。",
         "empty": "發言內容是空的。",
         "bad_image": "附件不存在、太大(圖片/網頁 {img_mb} MB、影音 {media_mb} MB 以內),或格式不支援"
-                     "(png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav):{p}",
+                     "(png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav;avi/mkv/3gp/m4v/wmv/mts/ts/flv/mpg 會自動轉成 mp4):{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
         "run_left": "目前還能連續發言 {left} 則才需要等{host}(上限 {n} 則;{host}開關自主會議時上限會跟著變)。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
@@ -393,13 +429,14 @@ def new_room(title, topic, seat_cfg, project, lead, mode, lang, seats):
                 "seat_cfg": seat_cfg, "project": project, "lead": lead, "mode": mode}
         if lead:
             meta["worktree"], meta["branch"], meta["git_common"] = make_worktree(project, rid, lang)
+            meta["direct"] = LEAD_DIRECT
         r = Room(rid, meta)
         os.makedirs(r.dir, exist_ok=True)
         r.save_meta()
         ROOMS[rid] = r
     r.add("system", tx(r, "start", title=title, project=project, mode=tx(r, "modes")[mode], lead=tx(r, "leads")[lead]))
     if lead:
-        r.add("system", tx(r, "worktree", path=meta["worktree"], branch=meta["branch"]))
+        r.add("system", tx(r, "worktree_direct" if meta.get("direct") else "worktree", path=meta["worktree"], branch=meta["branch"]))
     return r
 
 
@@ -563,19 +600,20 @@ def allow_meeting_in_agy():
             json.dump(d, f, ensure_ascii=False, indent=2)
 
 
-FINDERS = {"Claude": find_claude, "GPT": find_codex, "Gemini": find_gemini, "Helper": find_claude}
+FINDERS = {"Claude": find_claude, "GPT": find_codex, "Gemini": find_gemini, "Helper": find_claude, "GPT2": find_codex}
 INSTALL_HINT = {
     "Claude": "Install Claude Code (https://claude.com/claude-code) and sign in with your Claude account.",
     "GPT": "Install OpenAI Codex (desktop app or `npm i -g @openai/codex`) and sign in with your ChatGPT account.",
     "Gemini": "Install Antigravity CLI (Windows: `irm https://antigravity.google/cli/install.ps1 | iex`), run `agy` once and "
               "sign in with Google, then click \"Allow meeting tools\" here (adds only mcp(meeting/*) to agy's settings).",
+    "GPT2": "A second OpenAI Codex seat (same sign-in as GPT).",
     "Helper": "The helper is a second Claude Code seat (Sonnet by default): install Claude Code and sign in.",
 }
 
 
 def _signed_in(seat):
     home = os.path.expanduser("~")
-    if seat == "GPT":
+    if seat in ("GPT", "GPT2"):
         return os.path.isfile(os.path.join(home, ".codex", "auth.json")) or bool(os.environ.get("OPENAI_API_KEY"))
     if seat == "Gemini":
         return os.path.isdir(os.path.join(home, ".gemini", "antigravity-cli", "cache"))
@@ -664,6 +702,7 @@ def model_options():
                        "default": {"model": HELPER_DEFAULT_MODEL, "effort": ""}, "required": HELPER_REQUIRED},
             "last": last_models(),
             "GPT": {"models": gpt, "default": {"model": dm, "effort": de}},
+            "GPT2": {"models": gpt, "default": {"model": dm, "effort": de}},
             "Gemini": {"models": [{"id": "", "label": ""}] + agy_models(), "efforts": ["low", "medium", "high", "max"],
                        "default": {"model": "", "effort": ""}}}
 
@@ -690,7 +729,7 @@ def remember_models(cfg):
 def seat_label(room, seat):
     c = (room.meta.get("seat_cfg") or {}).get(seat) or {}
     eff = tx(room, "efforts")
-    if seat == "GPT":
+    if seat in ("GPT", "GPT2"):
         dm, de = codex_defaults()
         e = c.get("effort") or de
         return f"{c.get('model') or dm or tx(room, 'default')} · {eff.get(e, e)}"
@@ -808,6 +847,10 @@ def make_worktree(project, rid, lang):
         top = git(project, "rev-parse", "--show-toplevel")
     except RuntimeError:
         raise RuntimeError(tx(lang, "need_git"))
+    if LEAD_DIRECT:
+        branch = git(top, "rev-parse", "--abbrev-ref", "HEAD")
+        common = os.path.normpath(os.path.join(top, git(top, "rev-parse", "--git-common-dir")))
+        return top, branch, common
     branch = "meeting/" + datetime.now().strftime("%Y%m%d-%H%M") + "-" + uuid.uuid4().hex[:4]
     path = os.path.join(LOCAL, "worktrees", rid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -823,6 +866,9 @@ def project_of(room):
     p = room.meta.get("project") or DEFAULT_PROJECT
     return p if os.path.isdir(p) else DEFAULT_PROJECT
 
+
+# 主審直接改原專案、不開獨立副本(config.json 的 lead_direct 或環境變數 MEETING_LEAD_DIRECT 開啟)
+LEAD_DIRECT = os.environ.get("MEETING_LEAD_DIRECT", "").strip().lower() in ("1", "true", "yes")
 
 GIT_WRITE = ["git add", "git commit", "git reset", "git checkout", "git restore", "git rm", "git mv", "git stash",
              "git merge", "git rebase", "git cherry-pick", "git tag", "git branch", "git switch", "git apply", "git clean",
@@ -858,6 +904,11 @@ ROLE = {
                 "the meeting first and act only after a clear yes.**\n"
                 "- Follow the project's own rules (CLAUDE.md / AGENTS.md), e.g. commit message format, banned commands.\n"
                 "- Finish with a [SUMMARY] for the host: what you did, verification, what is left, what the host must decide.",
+        "direct_note": "- You work **directly in the project folder**: {wt} (branch {branch}). You may run programs, scripts, "
+                       "tests and builds and edit files freely; git commit after each piece of work so the host can roll "
+                       "back. Put scratch output in {out}, not in the project. Pushing, deploying, remote logins, deleting "
+                       "files and publishing are blocked; a refused command means it is not allowed: ask the host in the "
+                       "meeting instead and never look for a workaround.",
         "assist": "The host made **{other} the lead**; you assist.\n"
                   "- You **may not modify project files or run any git write command**; you may read files, use "
                   "read-only commands, and run programs that write only into your own scratch folder {out}.\n"
@@ -907,6 +958,9 @@ ROLE = {
                 "- 🔴 **git push、部署、刪除檔案、動到正式環境或金鑰的動作,一律先在會議室問{host},{host}明確同意才做。**\n"
                 "- 嚴格遵守專案說明檔(CLAUDE.md/AGENTS.md)裡的規則,例如提交訊息格式、禁止的指令。\n"
                 "- 最後寫【小結】交給{host}:做了什麼、驗證結果、還沒做的、需要{host}決定的。",
+        "direct_note": "- 你**直接在專案資料夾**裡工作:{wt}(分支 {branch})。可以自由跑程式、腳本、測試、打包、改檔;"
+                       "每完成一段改動就 git commit,讓{host}隨時能退回。試做的暫存輸出放在 {out},不要丟在專案裡。"
+                       "推送、部署、連遠端主機、刪檔、發佈都被擋;被拒絕的指令就是不准做,改成在會議室請{host}處理,不要找別的方法繞過。",
         "assist": "{host}指定 **{other} 是主審**、你是輔助。\n"
                   "- 你**不能修改專案裡的檔案、不能做 git 寫入動作**;可以讀檔、用唯讀指令查證,也可以跑程式,但只能寫到自己的試做資料夾 {out}。\n"
                   "- 你的工作:對 {other} 的方案與改動提出自己的意見,找漏洞、查證事實、提出風險與替代做法。\n"
@@ -946,6 +1000,10 @@ def role_text(room, seat):
     if seat == HELPER:
         return R["helper"].format(**kw)
     r = R["equal"] if not lead else (R["lead"] if lead == seat else R["assist"])
+    if lead == seat and room.meta.get("direct"):
+        # 直接模式:把「獨立副本」那一條換成「直接改專案」
+        lines = r.split("\n")
+        r = "\n".join(R["direct_note"] if ("**獨立副本**" in x or "**isolated copy**" in x) else x for x in lines)
     r = r.format(**kw)
     if HELPER in room_seats(room):
         r += R["has_helper"]
@@ -961,7 +1019,7 @@ def seat_prompt(room, seat, ticket):
     rep = {"SEAT": seat, "OTHER": others_of(room, seat), "ROOM": room.id,
            "TITLE": room.meta["title"], "TOPIC": room.meta["topic"], "PROJECT": project_of(room),
            "MODE": tx(room, "modes")[room.meta.get("mode") or "discuss"], "ROLE": role_text(room, seat),
-           "IMAGE": tx(room, "img_note") if seat == "GPT" else tx(room, "no_img"),
+           "IMAGE": tx(room, "img_note") if seat in ("GPT", "GPT2") else tx(room, "no_img"),
            "HOST": tx(room, "host"), "TICKET": ticket}
     for k, v in rep.items():
         tpl = tpl.replace("{{" + k + "}}", v)
@@ -989,11 +1047,11 @@ def start_seat(room, seat, restart=False):
     if os.environ.get("MEETING_SEAT_PATH"):
         env["PATH"] = os.environ["MEETING_SEAT_PATH"] + os.pathsep + env.get("PATH", "")
     lead = room.meta.get("lead")
-    if seat == "GPT":
+    if seat in ("GPT", "GPT2"):
         exe = find_codex()
         if not exe:
             raise RuntimeError(tx(room, "no_codex"))
-        work = os.path.join(seat_dir, "gpt")
+        work = os.path.join(seat_dir, seat.lower())
         os.makedirs(work, exist_ok=True)
         if lead == "GPT":
             root = project_of(room)
@@ -1373,7 +1431,8 @@ def export_room(room):
              f"- {L['type']}: {tx(room, 'modes')[room.meta.get('mode') or 'discuss']} · {tx(room, 'leads')[room.meta.get('lead') or '']}",
              f"- {L['models']}: " + " / ".join(f"{s} {seat_label(room, s)}" for s in room_seats(room))]
     if room.meta.get("branch"):
-        lines.append(f"- {L['worktree']}: {room.meta.get('worktree')} (`{room.meta['branch']}`, {L['merge']})")
+        lines.append(f"- {L['worktree']}: {room.meta.get('worktree')} (`{room.meta['branch']}`"
+                     + ("" if room.meta.get("direct") else f", {L['merge']}") + ")")
     lines += ["", f"## {L['topic']}", "", room.meta.get("topic", ""), "", f"## {L['log']}", ""]
     keep = kept_attachments(room)
     for m in room.msgs:
@@ -1687,6 +1746,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"have": have})
         fn = f"up_{uuid.uuid4().hex[:10]}{up['ext']}"
         os.replace(up["part"], os.path.join(room.dir, fn))
+        if up["ext"] in CONVERT_EXT:
+            try:
+                fn = to_mp4(room, fn)
+            except (RuntimeError, subprocess.SubprocessError, OSError) as e:
+                with UPLOADS_LOCK:
+                    UPLOADS.pop(uid, None)
+                return self._send(400, {"error": str(e)})
         with UPLOADS_LOCK:
             UPLOADS.pop(uid, None)
             UPLOADS_DONE[uid] = fn
@@ -1718,6 +1784,11 @@ class H(BaseHTTPRequestHandler):
         if left > 0:
             os.remove(dst)
             return self._send(400, {"error": "upload interrupted"})
+        if ext in CONVERT_EXT:
+            try:
+                fn = to_mp4(room, fn)
+            except (RuntimeError, subprocess.SubprocessError, OSError) as e:
+                return self._send(400, {"error": str(e)})
         frames_later(room, fn)
         return self._send(200, {"file": fn})
 
@@ -1875,6 +1946,14 @@ class H(BaseHTTPRequestHandler):
                         if cid:
                             r.cids[cid] = m
                     return self._send(200, m)
+                if act == "topic":   # 2026-10-16 站長：議題要能隨時改（結論、已結案事項寫上去），重新入席的席位以議題為準
+                    t = (b.get("topic") or "").strip()
+                    if not t or r.meta.get("closed"):
+                        return self._send(400, {"error": "empty topic or meeting closed"})
+                    r.meta["topic"] = t
+                    r.save_meta()
+                    r.add("system", "【議題已更新】所有席位以會議上方議題為準：" + chr(10) + t)
+                    return self._send(200, {"ok": True})
                 if act == "close":
                     if not r.meta.get("closed"):
                         close_room(r)
@@ -1895,6 +1974,7 @@ class H(BaseHTTPRequestHandler):
                         try:
                             r.meta["worktree"], r.meta["branch"], r.meta["git_common"] = make_worktree(
                                 r.meta.get("project") or DEFAULT_PROJECT, r.id, r.meta.get("lang") or DEFAULT_LANG)
+                            r.meta["direct"] = LEAD_DIRECT
                         except RuntimeError as e:
                             return self._send(400, {"error": str(e)})
                     r.meta["lead"] = s

@@ -40,8 +40,8 @@ aside h1{margin:0;font-size:19px;letter-spacing:.03em}
 .itemrow .item{flex:1;min-width:0}
 .del{flex:0 0 auto;background:transparent;color:var(--ink-3);border:1px solid transparent;padding:4px 8px;font-size:11px;font-weight:600}
 .itemrow:hover .del,.del:focus-visible,.del[data-arm="1"]{border-color:var(--hair);color:var(--danger)}
-.leave{background:transparent;color:var(--ink-3);padding:0 4px;font-size:13px;line-height:1;border-radius:6px}
-.leave:hover{color:var(--danger)}
+.leave{background:transparent;color:var(--ink-3);padding:0 8px;font-size:11px;line-height:1.7;border-radius:99px;border:1px solid var(--hair);margin-left:4px}
+.leave:hover{color:var(--danger);border-color:var(--danger)}
 .noseat{font-size:12px;color:var(--warn);font-weight:600}
 
 main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -71,14 +71,16 @@ header h2{margin:0;font-size:20px;flex:1 1 260px;min-width:0}
 .info b{color:var(--ink)}
 .topic{margin:0;padding:0 24px 10px;color:var(--ink-2);white-space:pre-wrap;font-size:14px}
 .log{flex:1;overflow:auto;padding:20px 24px 30px;display:flex;flex-direction:column;gap:18px}
-.msg{display:flex;flex-direction:column;gap:4px;max-width:900px;min-width:0}
+.msg{display:flex;flex-direction:column;gap:4px;max-width:min(900px,100%);min-width:0}
+.msg>*{max-width:100%;min-width:0}  /* 2026-10-15 站長手機:引用框不換行把站長訊息撐出畫面左邊 */
 .meta{display:flex;gap:10px;align-items:baseline}
 .who{font-weight:800;font-size:14px}
+.seq{font-weight:700;font-size:13px;color:var(--mute,#888);font-variant-numeric:tabular-nums}
 .time{font-size:11px;color:var(--ink-3)}
 .body{padding:12px 16px;border-radius:4px 14px 14px 14px;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel)}
 .m-Claude .who{color:var(--Claude)} .m-Claude .body{background:var(--Claude-bg)}
 .m-GPT .who{color:var(--GPT)} .m-GPT .body{background:var(--GPT-bg)}
-.m-Gemini .who{color:var(--Gemini)} .m-Gemini .body{background:var(--Gemini-bg)}
+.m-GPT2 .who{color:var(--GPT)} .m-GPT2 .body{background:var(--GPT-bg)} .m-Gemini .who{color:var(--Gemini)} .m-Gemini .body{background:var(--Gemini-bg)}
 .m-Helper .who{color:var(--Helper)} .m-Helper .body{background:var(--Helper-bg)}
 .m-user{align-self:flex-end;align-items:flex-end} .m-user .who{color:var(--me)}
 .m-user .body{background:var(--me-bg);border-radius:14px 4px 14px 14px}
@@ -155,7 +157,7 @@ fieldset label.s{display:block;font-size:12px;color:var(--ink-2);margin:8px 0 4p
   header h2{font-size:17px;flex:1 1 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .seats{order:3;flex:1 0 100%;flex-wrap:nowrap;overflow-x:auto;gap:6px}
   .seat{font-size:14px;padding:2px 10px;white-space:nowrap;flex:0 0 auto}
-  body:not(.more) .seat small,body:not(.more) .seat .opbtn,body:not(.more) .seat .leave{display:none}
+  body:not(.more) .seat small,body:not(.more) .seat .opbtn{display:none}
   body:not(.more) header>button:not(.mob){display:none}
   header>button:not(.mob){order:4;padding:6px 12px;font-size:15px}
   .info,.topic,.briefbar,.log,footer,.note,#pending,#replybar{padding-left:12px;padding-right:12px}
@@ -246,12 +248,12 @@ const I18N={
    closeSure:"Close? Click again",emptyLog:"Messages from you and the AIs will appear here.",send:"Send",say:"Speak as the host… (Enter to send, Shift+Enter for a new line; right-click a message to reply)",
    titleL:"Title",projL:"Project (every AI reads the same folder)",other:"Other folder…",otherPh:"Full path, e.g. /home/me/my-project",
    enlarge:"Enlarge",shrink:"Back",newTab:"Open in new tab",
-   reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy text",replyTo:"Replying to",attachment:"(attachment)",
+   reply:"Reply",veto:"Reject",adopt:"Adopt",copy:"Copy all",replyTo:"Replying to",attachment:"(attachment)",
    attach:"Attach images, video, audio or an HTML page (or drop / paste them here)",
    operate:"Operate",operating:"★ Operating",operateTip:"Let this AI run programs and edit files in an isolated copy of the project",operateOff:"Click to clear the assignment",uploading:"Uploading",uploadFail:"Upload failed",sending:"Sending…",sendFail:"Not sent (your text is kept, press Send again)",
    vetoText:"✕ Rejected this version (no need to revise or reply yet; wait until I have looked at the others).",adoptText:"✓ Adopted.",
    invite:"Invite",inviteGo:"Invite selected",inviteNote:"Tick the AIs to invite and pick their models. They join as soon as you confirm.",
-   leave:"ask to leave",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
+   leave:"Leave",leaveSure:s=>"Ask "+s+" to leave the meeting?",del:"Delete",delSure:"Delete? Click again",delTitle:"Delete this meeting from the list (transcripts already saved in the project are kept)",
    deleted:"Meeting deleted.",deletedKept:p=>"Meeting deleted. The transcript saved in the project is kept: "+p,
    noSeats:"No AI in the room yet — click Invite.",allSeated:"Every installed AI is already in this meeting.",
    modeL:"Meeting type",langL:"Meeting language",inviteL:"Invite now (optional — you can also invite later)",leadL:"Lead",topicL:"Topic (background, constraints, what to decide)",
@@ -274,12 +276,12 @@ const I18N={
    closeSure:"確定散會?再按一次",emptyLog:"會議開始後,大家的發言會依序出現在這裡。",send:"送出",say:"以主持人身分發言…(Enter 送出、Shift+Enter 換行;在訊息上按右鍵可回覆)",
    titleL:"標題",projL:"專案(所有 AI 讀同一個資料夾)",other:"其他資料夾…",otherPh:"輸入資料夾完整路徑,例:D:\\my-project",
    enlarge:"放大",shrink:"縮回",newTab:"新分頁開啟",
-   reply:"回覆",veto:"否決",adopt:"採用",copy:"複製文字",replyTo:"回覆",attachment:"(附件)",
+   reply:"回覆",veto:"否決",adopt:"採用",copy:"複製全文",replyTo:"回覆",attachment:"(附件)",
    attach:"附上圖片、影片、音樂或網頁檔(也可以直接拖進來或貼上)",
    operate:"指派操作",operating:"★ 操作中",operateTip:"讓這位 AI 在專案的獨立副本裡跑程式、改檔",operateOff:"按一下取消指派",uploading:"上傳中",uploadFail:"上傳失敗",sending:"送出中…",sendFail:"沒送出去(原文還在,請再按一次送出)",
    vetoText:"✕ 否決這版(先不用改、不用回覆,等我看完其他版本再說)。",adoptText:"✓ 採用。",
    invite:"邀請",inviteGo:"邀請入席",inviteNote:"勾選要邀請的 AI、選好模型,按下確認就入席。",
-   leave:"請離席",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
+   leave:"退席",leaveSure:s=>"確定請 "+s+" 退席?之後可以再按「邀請」請回來。",del:"刪除",delSure:"確定刪除?再按一次",delTitle:"從清單刪除這場會議(已存回專案的逐字稿會保留)",
    deleted:"會議已刪除。",deletedKept:p=>"會議已刪除。已存回專案的逐字稿保留在:"+p,
    noSeats:"會議室還沒有 AI,按「邀請」請人入席。",allSeated:"電腦裡裝的 AI 都已經在這場會議了。",
    modeL:"會議類型",langL:"會議語言",inviteL:"現在就邀請(可不選,開會後再邀請)",leadL:"誰當主審",topicL:"議題說明(背景、限制、要討論出什麼)",
@@ -300,7 +302,7 @@ const I18N={
    briefL:"議題",sayShort:"以主持人身分發言…",gripTip:"拖拉調整議題區高度(按上方標題列可收合)"}};
 const EFF={en:{"":"default",low:"low",medium:"medium",high:"high",xhigh:"x-high",max:"max",ultra:"ultra"},
   "zh-TW":{"":"預設",low:"低",medium:"中",high:"高",xhigh:"更高",max:"最高",ultra:"極限"}};
-const ALL=["Claude","GPT","Gemini","Helper"];
+const ALL=["Claude","GPT","Gemini","Helper","GPT2"];
 const $=id=>document.getElementById(id);
 let LANG=(navigator.language||"").startsWith("zh")?"zh-TW":"en";
 try{const saved=localStorage.getItem("amr-lang");if(saved in I18N)LANG=saved;}catch(e){}
@@ -358,7 +360,8 @@ function add(m){
   const box=document.createElement("div");box.className="msg m-"+m.who;
   const meta=document.createElement("div");meta.className="meta";
   const w=document.createElement("span");w.className="who";w.textContent=whoName(m.who);
-  const t=document.createElement("span");t.className="time";t.textContent=hm(m.at);meta.append(w,t);
+  const t=document.createElement("span");t.className="time";t.textContent=hm(m.at);
+  const sq=document.createElement("span");sq.className="seq";sq.textContent="#"+m.seq;meta.append(sq,w,t);   // 2026-10-27 站長：大家用「#編號」互相引用，畫面要看得到編號
   const body=document.createElement("div");body.className="body"+(/^(【小結】|\[SUMMARY\])/m.test(m.text)?" sum":"");body.textContent=m.text;
   for(const f of m.imgs||[]){const src="/files/"+encodeURIComponent(cur)+"/"+encodeURIComponent(f);
     if(/\.html?$/i.test(f)){const box=document.createElement("div");box.className="page";
@@ -382,7 +385,9 @@ function add(m){
     mk("↩",L().reply,()=>startReply(m));
     if(m.who!=="user"){mk("✕",L().veto,()=>react(m,"veto"));mk("✓",L().adopt,()=>react(m,"adopt"));}
     meta.appendChild(acts);
-    box.addEventListener("contextmenu",e=>{e.preventDefault();openCtx(e,m);});}
+    box.addEventListener("contextmenu",e=>{   // 有反白文字時讓瀏覽器原生選單出來（可只複製選取的部分，站長 10/14）；沒反白才出會議室選單
+      const sel=getSelection();if(sel&&!sel.isCollapsed&&box.contains(sel.anchorNode)&&sel.toString().trim())return;
+      e.preventDefault();openCtx(e,m);});}
   box.append(meta,body);
   if(m.who==="user"){const ack=document.createElement("div");ack.className="ack";ack.dataset.seq=m.seq;box.appendChild(ack);}
   log.appendChild(box);
@@ -402,8 +407,8 @@ function renderSeats(j){
       op.className="opbtn"+(isLead?" on":"");op.textContent=isLead?L().operating:L().operate;op.title=isLead?L().operateOff:L().operateTip;
       op.onclick=async()=>{op.disabled=true;try{await post(R(cur)+"/lead",{seat:isLead?"":s});await open(cur);}catch(e){$("note").textContent=e.message;op.disabled=false;}};
       el.appendChild(op);}
-    if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent="×";x.title=L().leave;x.setAttribute("aria-label",whoName(s)+" "+L().leave);
-      x.onclick=async()=>{x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
+    if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent=L().leave;x.title=L().leave;x.setAttribute("aria-label",whoName(s)+" "+L().leave);
+      x.onclick=async()=>{if(!confirm(L().leaveSure(whoName(s))))return;x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
     box.appendChild(el);}
   if(!curSeats.length&&!j.meta.closed){const h=document.createElement("span");h.className="noseat";h.textContent=L().noSeats;box.appendChild(h);}
 }
@@ -495,11 +500,14 @@ async function send(){
   $("send").disabled=closed;
 }
 async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
+function copyText(t){   // 手機或非安全連線時 navigator.clipboard 可能不能用，退回 execCommand
+  const fb=()=>{const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(err){}ta.remove();};
+  try{navigator.clipboard.writeText(t).catch(fb);}catch(err){fb();}}
 function openCtx(e,m){const c=$("ctx");c.textContent="";
   const item=(label,fn)=>{const b=document.createElement("button");b.type="button";b.textContent=label;b.onclick=()=>{c.hidden=true;fn();};c.appendChild(b);};
   item("↩ "+L().reply,()=>startReply(m));
   if(m.who!=="user"){item("✕ "+L().veto,()=>react(m,"veto"));item("✓ "+L().adopt,()=>react(m,"adopt"));}
-  item("⧉ "+L().copy,()=>{try{navigator.clipboard.writeText(m.text);}catch(err){}});
+  item("⧉ "+L().copy,()=>copyText(m.text));
   c.hidden=false;const w=c.offsetWidth,h=c.offsetHeight;
   c.style.left=Math.min(e.clientX,innerWidth-w-8)+"px";c.style.top=Math.min(e.clientY,innerHeight-h-8)+"px";}
 document.addEventListener("click",e=>{if(!$("ctx").contains(e.target))$("ctx").hidden=true;});
@@ -567,7 +575,7 @@ function seatPicker(s,cfg,withCheck,agent){
   opt(sm,M.models.map(m=>[m.id,mlabel(m)+(m.id&&m.id===dflt.model?" ("+L().dflt+")":"")]),cfg.model||dflt.model||"");
   fs.append(l1,sm);
   const se=document.createElement("select");se.className="e";
-  const effs=()=>{if(s==="GPT"){const m=M.models.find(x=>x.id===sm.value);return m?m.efforts:["low","medium","high"];}return M.efforts||[];};
+  const effs=()=>{if(s==="GPT"||s==="GPT2"){const m=M.models.find(x=>x.id===sm.value);return m?m.efforts:["low","medium","high"];}return M.efforts||[];};
   const sync=()=>{const list=effs();if(!list.length){se.hidden=true;l2.hidden=true;return;}se.hidden=false;l2.hidden=false;
     opt(se,[["",L().dflt]].concat(list.map(e=>[e,EFF[LANG][e]||e])),se.value||cfg.effort||dflt.effort||"");};
   const l2=document.createElement("label");l2.className="s";l2.textContent=L().effort;fs.append(l2,se);
