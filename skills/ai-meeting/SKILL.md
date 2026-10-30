@@ -32,9 +32,19 @@ python -X utf8 <技能>/scripts/meeting.py --base <base> say <id> --file <UTF8�
 python -X utf8 <技能>/scripts/meeting.py --base <base> watch <id> --after <last_seq> --seconds 45
 ```
 
-首次讀完整上下文，接著保存 last_seq，只讀增量；保留證據訊息編號。發言明確標成「【Codex主持】」，不冒充站長、CC、後台或其他 AI。新版 API 以 who=Codex主持 區分站長；舊版忽略 who 時正文仍保留身分。不要冒用其他參與者的 who。
+首次分頁讀完整上下文，接著保存 last_seq，只讀增量；保留證據訊息編號。發言明確標成「【Codex主持】」，不冒充站長、CC、後台或其他 AI。新版 API 以 who=Codex主持 區分站長；舊版忽略 who 時正文仍保留身分。不要冒用其他參與者的 who。
 
 整理議程與驗收標準，@具體席位分工；發現分歧要求證據和反例；區分已驗證、推測、待決。@席位是會議內建機制，無需另開 Codex 聊天或建立本工具的子代理。收到成果要檢查證據；誤判需在會議更正並引用原訊息。整理共識、分歧、成果檔和待使用者決定的事。
+
+遠端手機連線時，命令輸出過密可能塞滿桌面程式的待傳送佇列而中斷連線。`read`／`watch` 預設每頁最多 6000 個 UTF-8 位元組，單行輸出；不要把完整逐字稿、長文件或大量日誌一次印到終端，也不要只依賴工具的 `max_output_tokens`，因為截斷前可能已傳送大量輸出事件。診斷時在程序內先篩選、彙總，再輸出少量結果。
+
+分頁回傳 `has_more`、`last_seq`、`next_offset`、`latest_seq`。`last_seq` 只到最後完整讀完的訊息；`latest_seq` 是伺服器最新序號，不可當成已讀游標。只要 `has_more=true`，用上頁的 `last_seq` 與 `next_offset` 接續：
+
+```
+python -X utf8 <技能>/scripts/meeting.py --base <base> read <id> --after <last_seq> --offset <next_offset>
+```
+
+`text_complete=false` 表示該則長訊息尚未讀完；接續片段與前段組合後才可判讀或派工。每次確認游標有前進；若附件或欄位過大，工具會明確報錯，改用 `snapshot` 保存完整紀錄，再分段讀本機檔案，不可跳到 `latest_seq`。完整快照不要直接輸出到終端。
 
 watch 最多 45 秒返回，等待所有新發言（主持需掌握各席成果）；用 after 游標接續，避免重複轉述或漏掉未點名發言。不要開無限背景監看後就宣稱能自行醒來；目前回合內以有界等待推進，離開回合前如需未來喚醒，須用可用的正式排程工具並核對使用者意圖。不可假稱有永久背景主持。
 
