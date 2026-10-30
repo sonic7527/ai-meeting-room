@@ -56,12 +56,28 @@ def message_page(data, after, offset, max_bytes):
     return page
 
 
-def request(base, path, body=None):
+def room_page(rows, start, max_bytes):
+    if not isinstance(rows, list) or not 0 <= start <= len(rows):
+        raise ValueError('房間清單格式或起點無效。')
+    page = {'rooms': [], 'next_start': start, 'has_more': start < len(rows)}
+    for index in range(start, len(rows)):
+        row = {k: rows[index][k] for k in ('id', 'title', 'closed', 'count', 'created') if k in rows[index]}
+        candidate = {'rooms': page['rooms'] + [row], 'next_start': index + 1,
+                     'has_more': index + 1 < len(rows)}
+        if len(encode(candidate).encode('utf-8')) + 2 > max_bytes:
+            if not page['rooms']:
+                raise ValueError('單一房間欄位超出上限，請提高 --max-bytes。')
+            break
+        page = candidate
+    return page
+
+
+def request(base, path, body=None, timeout=15):
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(base + path, data=data,
                                  headers={'Content-Type': 'application/json', 'Origin': base})
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
         raise SystemExit('會議服務回覆錯誤（狀態碼' + str(error.code) + '），未自動重試或重送。') from None
@@ -83,7 +99,9 @@ def main():
     p = argparse.ArgumentParser(description='Codex 會議主持：指定會議、分頁讀取與有界等待。')
     p.add_argument('--base', required=True)
     sub = p.add_subparsers(dest='cmd', required=True)
-    sub.add_parser('rooms')
+    rooms = sub.add_parser('rooms')
+    rooms.add_argument('--start', type=int, default=0)
+    rooms.add_argument('--max-bytes', type=int, default=3072)
     for cmd in ('read', 'say', 'watch', 'snapshot'):
         q = sub.add_parser(cmd)
         q.add_argument('room')
@@ -94,10 +112,12 @@ def main():
         else:
             q.add_argument('--after', type=int, default=0)
             q.add_argument('--offset', type=int, default=0)
-            q.add_argument('--max-bytes', type=int, default=6000)
+            q.add_argument('--max-bytes', type=int, default=3072)
         if cmd == 'watch':
             q.add_argument('--seconds', type=int, choices=range(1, 46), default=45)
     a = p.parse_args()
+    if a.cmd == 'rooms' and (a.start < 0 or not 2048 <= a.max_bytes <= 12000):
+        p.error('起點不可為負數；輸出上限須介於 2048 與 12000 位元組。')
     if a.cmd in ('read', 'watch') and (a.after < 0 or a.offset < 0 or not 2048 <= a.max_bytes <= 12000):
         p.error('序號與位移不可為負數；輸出上限須介於 2048 與 12000 位元組。')
     base = a.base.rstrip('/')
@@ -105,7 +125,7 @@ def main():
     if parsed.scheme not in ('http', 'https') or not parsed.netloc or parsed.path not in ('', '/'):
         p.error('--base 須為 http(s) 主機網址，不可含子路徑。')
     if a.cmd == 'rooms':
-        result = request(base, '/api/rooms')
+        result = room_page(request(base, '/api/rooms'), a.start, a.max_bytes)
     else:
         path = '/api/rooms/' + urllib.parse.quote(a.room, safe='') + '/messages'
         if a.cmd == 'snapshot':
@@ -134,11 +154,17 @@ def main():
                 p.error('發言檔案不可為空白。')
             if not content.startswith('【Codex主持】'):
                 content = '【Codex主持】\n' + content
-            result = request(base, path, {'who': 'Codex主持', 'text': content})
+            sent = request(base, path, {'who': 'Codex主持', 'text': content})
+            result = {'sent': True, 'seq': sent['seq']}  # Do not echo the submitted text.
         else:
+            result = {'messages': [], 'last_seq': a.after}
             deadline = time.monotonic() + (a.seconds if a.cmd == 'watch' else 0)
             while True:
-                result = request(base, path + '?after=' + str(a.after))
+                remaining = deadline - time.monotonic()
+                if a.cmd == 'watch' and remaining <= 0:
+                    break
+                timeout = min(15, remaining) if a.cmd == 'watch' else 15
+                result = request(base, path + '?after=' + str(a.after), timeout=timeout)
                 if a.cmd == 'read' or result.get('messages') or result.get('meta', {}).get('closed'):
                     break
                 remaining = deadline - time.monotonic()
@@ -149,8 +175,16 @@ def main():
                 result = message_page(result, a.after, a.offset, a.max_bytes)
             except ValueError as error:
                 p.error(str(error))
-    print(encode(result))
+    encoded = encode(result)
+    if len(encoded.encode('utf-8')) + 2 > getattr(a, 'max_bytes', 3072):
+        raise ValueError('回覆超出輸出上限；請保留游標並改用本機快照，不可重送發言。')
+    print(encoded)
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except (OSError, UnicodeError):
+        raise SystemExit('會議檔案或輸出讀寫失敗；未自動重送，請核對實際收件狀態。') from None
+    except (ValueError, KeyError, TypeError):
+        raise SystemExit('會議資料或分頁參數無效；未自動重送，請保留游標並核對來源。') from None
