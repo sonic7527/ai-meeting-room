@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -59,8 +60,23 @@ def request(base, path, body=None):
     data = None if body is None else json.dumps(body, ensure_ascii=False).encode('utf-8')
     req = urllib.request.Request(base + path, data=data,
                                  headers={'Content-Type': 'application/json', 'Origin': base})
-    with urllib.request.urlopen(req, timeout=15) as response:
-        return json.load(response)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        raise SystemExit('會議服務回覆錯誤（狀態碼' + str(error.code) + '），未自動重試或重送。') from None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        reason = getattr(error, 'reason', error)
+        code = getattr(reason, 'winerror', None) or getattr(reason, 'errno', None)
+        if code == 10013:
+            message = '本機網路存取遭權限限制（10013），請由已授權執行環境重試。'
+        elif isinstance(reason, TimeoutError):
+            message = '讀取會議逾時，未自動重試或重送。'
+        else:
+            message = '無法連線會議服務，請確認服務與網址；未自動重試或重送。'
+        raise SystemExit(message) from None
+    except json.JSONDecodeError:
+        raise SystemExit('會議服務回覆的資料格式無效，未輸出原始內容或自動重送。') from None
 
 
 def main():

@@ -24,7 +24,7 @@
 
 ### 2026-10-30：主持讀取輸出限制
 
-Codex 主持技能的 `read`／`watch` 改為分頁讀取，預設每頁最多 6000 個 UTF-8 位元組，以降低大量終端輸出塞滿手機遠端連線佇列的風險。長訊息以 `--after <last_seq> --offset <next_offset>` 接續，讀到 `has_more=false`；`latest_seq` 不是已讀游標。完整紀錄可用 `snapshot` 保存在本機。更新後執行 `install_codex_skill.ps1`，不需重啟會議室或改環境變數；既有聊天應重讀技能。這是輸出路徑的緩解措施，不代表已修復 ChatGPT 傳輸層或所有斷線原因。
+Codex 主持技能的 `read`／`watch` 改為分頁讀取，預設每頁最多 6000 個 UTF-8 位元組，以降低大量終端輸出塞滿手機遠端連線佇列的風險。長訊息以 `--after <last_seq> --offset <next_offset>` 接續，讀到 `has_more=false`；`latest_seq` 不是已讀游標。完整紀錄可用 `snapshot` 保存在本機。連線失敗、權限限制、逾時及無效回覆也限制為單行中文錯誤，不輸出原始網址、回應或堆疊，不自動重送。更新後執行 `install_codex_skill.ps1`，不需重啟會議室或改環境變數；既有聊天應重讀技能。這是輸出路徑的緩解措施，不代表已修復 ChatGPT 傳輸層或所有斷線原因。
 
 ## Requirements
 
