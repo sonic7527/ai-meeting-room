@@ -175,6 +175,7 @@ fieldset label.s{display:block;font-size:12px;color:var(--ink-2);margin:8px 0 4p
   .page iframe{height:60dvh}
   .two{grid-template-columns:minmax(0,1fr)}}
 @media (hover:none){.msgacts{opacity:1}}
+.file-attachment{display:block;max-width:100%;overflow-wrap:anywhere;padding:10px 12px;margin:8px 0;border:1px solid #718096;border-radius:8px;color:inherit;text-decoration:underline}
 </style></head><body>
 <aside>
   <div class="top">
@@ -204,7 +205,7 @@ fieldset label.s{display:block;font-size:12px;color:var(--ink-2);margin:8px 0 4p
   <div class="log" id="log"><div class="empty" data-t="emptyLog"></div></div>
   <div id="replybar" hidden><span id="replytxt"></span><button type="button" id="replyx" aria-label="cancel">×</button></div>
   <div id="pending"></div>
-  <footer><button type="button" class="ghost" id="clip" disabled>📎</button><input type="file" id="pick" multiple hidden accept="image/*,video/*,audio/*,.html,.htm"><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
+  <footer><button type="button" class="ghost" id="clip" disabled>📎</button><input type="file" id="pick" multiple hidden aria-label="選擇參考附件（不限檔案類型）"><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
   <div id="ctx" hidden></div>
   <div class="note" id="note"></div>
 </main>
@@ -373,8 +374,10 @@ function add(m){
       bar.append(nm,big,tab);box.append(bar,fr);body.appendChild(box);}
     else if(/\.(mp4|webm|mov)$/i.test(f)){const v=document.createElement("video");v.src=src;v.controls=true;v.preload="none";v.playsInline=true;body.appendChild(v);}
     else if(/\.(mp3|m4a|wav)$/i.test(f)){const au=document.createElement("audio");au.src=src;au.controls=true;au.preload="none";body.appendChild(au);}
-    else{const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
-      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}}
+    else if(/\.(png|jpe?g|webp|gif)$/i.test(f)){const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
+      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);}
+    else{const a=document.createElement("a");a.href=src;a.download=f.replace(/^up_[0-9a-f]+_/i,"");a.className="file-attachment";
+      a.textContent="📎 "+a.download+" · 下載附件";body.appendChild(a);}}
   const q=/^↩ #(\d+) ([^：\n]+)：([^\n]*)\n?/.exec(m.text);
   if(q){body.textContent=m.text.slice(q[0].length);const qt=document.createElement("div");qt.className="quote";qt.textContent=q[2]+"："+q[3];
     qt.onclick=()=>{const t=document.querySelector('.msg[data-seq="'+q[1]+'"]');if(t){t.scrollIntoView({behavior:"smooth",block:"center"});t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1200);}};

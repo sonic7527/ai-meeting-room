@@ -12,9 +12,9 @@ import time
 import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs, unquote, quote
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 IS_WIN = os.name == "nt"
 
@@ -28,7 +28,7 @@ def _load_local_config():
     for key, var in (("host_name", "MEETING_HOST_NAME"), ("lang", "MEETING_LANG"), ("port", "MEETING_PORT"),
                      ("project", "MEETING_PROJECT"), ("home", "MEETING_HOME"), ("export_dir", "MEETING_EXPORT_DIR"),
                      ("ai_run_limit", "MEETING_AI_RUN_LIMIT"), ("auto_run_limit", "MEETING_AUTO_RUN_LIMIT"), ("image_max_mb", "MEETING_IMAGE_MAX_MB"),
-                     ("media_max_mb", "MEETING_MEDIA_MAX_MB"), ("helper", "MEETING_HELPER"),
+                     ("file_max_mb", "MEETING_FILE_MAX_MB"), ("media_max_mb", "MEETING_MEDIA_MAX_MB"), ("helper", "MEETING_HELPER"),
                      ("helper_model", "MEETING_HELPER_MODEL"), ("lead_direct", "MEETING_LEAD_DIRECT")):
         if key in cfg and not os.environ.get(var):
             os.environ[var] = str(cfg[key])
@@ -92,6 +92,7 @@ MEDIA_EXT = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktim
 CONVERT_EXT = {".avi", ".mkv", ".3gp", ".3g2", ".m4v", ".wmv", ".mts", ".m2ts", ".ts", ".flv", ".mpg", ".mpeg", ".vob"}
 ATTACH_MAX = int(float(os.environ.get("MEETING_IMAGE_MAX_MB", "32")) * 1024 * 1024)
 MEDIA_MAX = int(float(os.environ.get("MEETING_MEDIA_MAX_MB", "4096")) * 1024 * 1024)
+FILE_MAX = int(float(os.environ.get("MEETING_FILE_MAX_MB", "4096")) * 1024 * 1024)
 ALL_EXT = IMG_EXT | PAGE_EXT | set(MEDIA_EXT) | CONVERT_EXT
 UPLOADS, UPLOADS_DONE, UPLOADS_LOCK = {}, {}, threading.Lock()
 
@@ -125,22 +126,31 @@ def _tool(name):
 
 
 def to_mp4(room, fn):
-    """把 CONVERT_EXT 的影片轉成 mp4（H.264＋AAC，手機瀏覽器都能播），成功回傳新檔名、刪掉原檔。"""
+    """影片成功轉成 mp4 才移除原檔；非影片或轉換失敗保留原格式附件。"""
     src = os.path.join(room.dir, fn)
+    if os.path.splitext(fn)[1].lower() == ".ts":
+        with open(src, "rb") as f:
+            head = f.read(564)
+        if not any(head[i] == head[i + 188] == head[i + 376] == 0x47 for i in range(max(0, len(head) - 376))):
+            return fn  # TypeScript and other non-video files retain their bytes.
     ff = _tool("ffmpeg")
     if not ff:
-        os.remove(src)
-        raise RuntimeError("這種影片要先轉成 mp4 才能播放，但這台電腦找不到 ffmpeg；請改傳 mp4／mov")
+        return fn
     new = os.path.splitext(fn)[0] + ".mp4"
     dst = os.path.join(room.dir, new)
-    r = subprocess.run([ff, "-v", "error", "-y", "-i", src, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", dst],
-                       capture_output=True, text=True, timeout=3600, creationflags=NO_WINDOW)
-    os.remove(src)
-    if r.returncode != 0 or not os.path.isfile(dst) or os.path.getsize(dst) == 0:
+    try:
+        r = subprocess.run([ff, "-v", "error", "-y", "-i", src, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", dst],
+                           capture_output=True, text=True, timeout=3600, creationflags=NO_WINDOW)
+        if r.returncode != 0 or not os.path.isfile(dst) or os.path.getsize(dst) == 0:
+            if os.path.isfile(dst):
+                os.remove(dst)
+            return fn
+    except (OSError, subprocess.SubprocessError):
         if os.path.isfile(dst):
             os.remove(dst)
-        raise RuntimeError("影片轉檔失敗，請改傳 mp4／mov：" + (r.stderr or "").strip()[-200:])
+        return fn
+    os.remove(src)
     return new
 
 
@@ -174,9 +184,28 @@ def frames_later(room, f):
         threading.Thread(target=make_frames, args=(room, f), daemon=True).start()
 
 
+def attachment_name(name):
+    name = str(name).replace("\\", "/").rsplit("/", 1)[-1]
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .") or "附件"
+    stem, ext = os.path.splitext(name)
+    while len((stem + ext).encode("utf-16-le")) > 192:
+        if stem:
+            stem = stem[:-1]
+        else:
+            ext = ext[:-1]
+    return stem + ext
+
+
+def attachment_label(name):
+    return re.sub(r"^up_[0-9a-f]+_", "", name)
+
+
 def attach_info(room, f):
     p = os.path.join(room.dir, f)
-    d = {"path": p}
+    ext = os.path.splitext(f)[1].lower()
+    kind = "image" if ext in IMG_EXT else "video" if ext in VIDEO_EXT else "audio" if ext in MEDIA_EXT else "page" if ext in PAGE_EXT else "file"
+    d = {"path": p, "name": attachment_label(f), "kind": kind,
+         "size": os.path.getsize(p) if os.path.isfile(p) else None}
     if os.path.splitext(f)[1].lower() in VIDEO_EXT:
         fd = frames_dir(room, f)
         if os.path.isdir(fd):
@@ -191,7 +220,7 @@ def attach_info(room, f):
 
 def size_ok(path_or_size, ext):
     n = path_or_size if isinstance(path_or_size, int) else os.path.getsize(path_or_size)
-    return n <= (MEDIA_MAX if ext in MEDIA_EXT or ext in CONVERT_EXT else ATTACH_MAX)
+    return 0 <= n <= (ATTACH_MAX if ext in IMG_EXT or ext in PAGE_EXT else MEDIA_MAX if ext in MEDIA_EXT or ext in CONVERT_EXT else FILE_MAX)
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LANGS = ("en", "zh-TW")
 
@@ -244,8 +273,7 @@ T = {
         "run_limit": "The host has not replied yet and the AIs have sent {n} messages in a row. Call wait_for_messages and wait for the host.",
         "closed_no_speak": "The meeting is closed. You can no longer speak.",
         "empty": "The message is empty.",
-        "bad_image": "Attachment not found, too large (images/pages {img_mb} MB, video/audio {media_mb} MB max) or "
-                     "unsupported (png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav; avi/mkv/3gp/m4v/wmv/mts/ts/flv/mpg are converted to mp4): {p}",
+        "bad_image": "附件不存在或超過大小限制：圖片／網頁 {img_mb} MB、影音 {media_mb} MB、其他檔案 {file_mb} MB；支援任意檔案類型：{p}",
         "no_new": "No new messages. Call wait_for_messages again.",
         "run_left": "You may post {left} more message(s) in a row before waiting for the {host} (current limit {n}; the limit changes when autonomous mode is turned on or off).",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
@@ -307,8 +335,7 @@ T = {
         "run_limit": "{host}還沒回應,AI 已連講 {n} 則。請呼叫 wait_for_messages 等{host}發言。",
         "closed_no_speak": "已散會,不能再發言。",
         "empty": "發言內容是空的。",
-        "bad_image": "附件不存在、太大(圖片/網頁 {img_mb} MB、影音 {media_mb} MB 以內),或格式不支援"
-                     "(png/jpg/webp/gif/html/mp4/webm/mov/mp3/m4a/wav;avi/mkv/3gp/m4v/wmv/mts/ts/flv/mpg 會自動轉成 mp4):{p}",
+        "bad_image": "附件不存在或超過大小限制：圖片／網頁 {img_mb} MB、影音 {media_mb} MB、其他檔案 {file_mb} MB；支援任意檔案類型：{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
         "run_left": "目前還能連續發言 {left} 則才需要等{host}(上限 {n} 則;{host}開關自主會議時上限會跟著變)。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
@@ -1461,7 +1488,7 @@ def export_room(room):
                 continue
             if os.path.isfile(src):
                 shutil.copyfile(src, dst)
-                lines += [f"[{f}]({f})" if f.lower().endswith(tuple(PAGE_EXT)) else f"![]({f})", ""]
+                lines += [f"![]({quote(f)})" if os.path.splitext(f)[1].lower() in IMG_EXT else f"[{attachment_label(f)}]({quote(f)})", ""]
     with open(os.path.join(out, "transcript.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     shutil.copyfile(os.path.join(room.dir, "log.jsonl"), os.path.join(out, "log.jsonl"))
@@ -1568,17 +1595,17 @@ def call_tool(name, a):
         if isinstance(page, str) and page.strip():
             if len(page.encode("utf-8")) > ATTACH_MAX:
                 return {"ok": False, "reason": tx(room, "bad_image", p="html", img_mb=ATTACH_MAX >> 20,
-                                                  media_mb=MEDIA_MAX >> 20)}
+                                                  media_mb=MEDIA_MAX >> 20, file_mb=FILE_MAX >> 20)}
             fn = f"{len(room.msgs) + 1:03d}_{seat}_page.html"
             with open(os.path.join(room.dir, fn), "w", encoding="utf-8") as f:
                 f.write(page)
             imgs.append(fn)
         for ip in [x for x in (a.get("attach_path"), a.get("image_path")) if x]:
             ext = os.path.splitext(ip)[1].lower()
-            if ext not in ALL_EXT or not os.path.isfile(ip) or not size_ok(ip, ext):
+            if not os.path.isfile(ip) or not size_ok(ip, ext):
                 return {"ok": False, "reason": tx(room, "bad_image", p=ip, img_mb=ATTACH_MAX >> 20,
-                                                  media_mb=MEDIA_MAX >> 20)}
-            fn = f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}{ext}"
+                                                  media_mb=MEDIA_MAX >> 20, file_mb=FILE_MAX >> 20)}
+            fn = f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}{ext}" if ext in ALL_EXT else f"{len(room.msgs) + 1:03d}_{seat}_{len(imgs) + 1}_{attachment_name(ip)}"
             shutil.copyfile(ip, os.path.join(room.dir, fn))
             imgs.append(fn)
             frames_later(room, fn)
@@ -1662,7 +1689,7 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _send_file(self, path, ctype):
+    def _send_file(self, path, ctype, headers=None):
         size = os.path.getsize(path)
         start, end = 0, size - 1
         rng = re.match(r"bytes=(\d*)-(\d*)$", self.headers.get("Range") or "")
@@ -1685,6 +1712,8 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(end - start + 1))
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Access-Control-Allow-Origin", "*")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         try:
             with open(path, "rb") as f:
@@ -1714,14 +1743,14 @@ class H(BaseHTTPRequestHandler):
             self._drain(n)
             if room.meta.get("closed"):
                 return self._send(400, {"error": tx(room, "closed_no_speak")})
-            if ext not in ALL_EXT or total <= 0 or not size_ok(total, ext):
+            if total < 0 or not size_ok(total, ext):
                 return self._send(400, {"error": tx(room, "bad_image", p=name, img_mb=ATTACH_MAX >> 20,
-                                                      media_mb=MEDIA_MAX >> 20)})
+                                                      media_mb=MEDIA_MAX >> 20, file_mb=FILE_MAX >> 20)})
             uid = uuid.uuid4().hex
             part = os.path.join(room.dir, f".part_{uid}")
             open(part, "wb").close()
             with UPLOADS_LOCK:
-                UPLOADS[uid] = {"room": room.id, "part": part, "total": total, "ext": ext}
+                UPLOADS[uid] = {"room": room.id, "part": part, "total": total, "ext": ext, "name": attachment_name(name)}
             return self._send(200, {"uid": uid})
         uid = (q.get("uid") or [""])[0]
         off = int((q.get("off") or ["-1"])[0] or -1)
@@ -1753,7 +1782,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(400, {"error": "upload interrupted", "have": off})
         if have < up["total"]:
             return self._send(200, {"have": have})
-        fn = f"up_{uuid.uuid4().hex[:10]}{up['ext']}"
+        fn = f"up_{uuid.uuid4().hex[:10]}_{up['name']}"
         os.replace(up["part"], os.path.join(room.dir, fn))
         if up["ext"] in CONVERT_EXT:
             try:
@@ -1777,10 +1806,10 @@ class H(BaseHTTPRequestHandler):
         ext = os.path.splitext(name)[1].lower()
         if room.meta.get("closed"):
             return self._send(400, {"error": tx(room, "closed_no_speak")})
-        if ext not in ALL_EXT or n <= 0 or not size_ok(n, ext):
+        if n < 0 or not size_ok(n, ext):
             return self._send(400, {"error": tx(room, "bad_image", p=name, img_mb=ATTACH_MAX >> 20,
-                                                  media_mb=MEDIA_MAX >> 20)})
-        fn = f"up_{uuid.uuid4().hex[:10]}{ext}"
+                                                  media_mb=MEDIA_MAX >> 20, file_mb=FILE_MAX >> 20)})
+        fn = f"up_{uuid.uuid4().hex[:10]}_{attachment_name(name)}"
         dst = os.path.join(room.dir, fn)
         left = n
         with open(dst, "wb") as f:
@@ -1879,10 +1908,18 @@ class H(BaseHTTPRequestHandler):
             else:
                 p = os.path.join(DATA, parts[1], parts[2])
             ext = os.path.splitext(p)[1].lower()
-            if ext not in ALL_EXT or not os.path.isfile(p):
+            if not os.path.isfile(p):
                 return self._send(404, {"error": "not found"})
+            if ext not in ALL_EXT and not parts[2].startswith("up_"):
+                msgs = archive_messages(get_archive(parts[1])) if parts[1].startswith(ARC_PREFIX) else get_room(parts[1]).msgs
+                if not any(parts[2] in (m.get("imgs") or []) for m in msgs):
+                    return self._send(404, {"error": "找不到附件"})
             if ext in MEDIA_EXT:
                 return self._send_file(p, MEDIA_EXT[ext])
+            if ext not in IMG_EXT and ext not in PAGE_EXT:
+                return self._send_file(p, "application/octet-stream", headers={
+                    "Content-Disposition": "attachment; filename=attachment; filename*=UTF-8''" + quote(attachment_label(parts[2]), safe=""),
+                    "X-Content-Type-Options": "nosniff"})
             with open(p, "rb") as f:
                 data = f.read()
             if ext in PAGE_EXT:
