@@ -7,7 +7,7 @@
 - **Uses the subscriptions you already have.** Claude runs through Claude Code (your Claude account), GPT through OpenAI Codex (your ChatGPT account), Gemini through Antigravity CLI (your Google account). No API keys.
 - **Auto-detects** which of the three are installed and signed in. Nobody joins until you click **Invite**; invite or dismiss any AI at any time.
 - **You are the host.** Interjections are answered first, every host message shows who has replied, the AIs never end the meeting on their own, and they pause after 8 messages in a row without you. A ✕ rejection only marks that version — the AIs wait until you have reviewed the rest and say what to change; an explicit change request is acted on immediately.
-- **Chat-app feel.** Right-click any message to reply to it, reject (✕) or adopt (✓) it in one click; Enter sends, Shift+Enter adds a line.
+- **Chat-app feel.** Right-click any message to reply to it, reject (✕) or adopt (✓) it in one click; each message has its own copy button (⧉), and a text selection stays inside one message so you can copy just part of it (on phones, long-press uses the system selection); Enter sends, Shift+Enter adds a line.
 - **Mock-ups right in the conversation.** An AI can post a self-contained HTML page with its message; it is shown inline and stays interactive (animations, buttons, dragging) — no URLs to open.
 - **Same project, same context.** Pick a folder; every AI reads the same files (CLAUDE.md, AGENTS.md, GEMINI.md, README) before speaking.
 - **A fourth seat: the helper.** Every meeting gets a cheaper Claude (Sonnet by default; set Haiku in the config to save usage, or switch mid-meeting). It does not plan or judge quality; it only does repetitive hands-on work when someone writes "@Helper" (batch renders, side-by-side videos, frame grabs, check scripts), so the other AIs can focus on the hard parts. It is not woken unless called, and its messages do not count toward the "AIs pause after N messages" limit.
@@ -21,6 +21,10 @@
 - English and Traditional Chinese UI and meeting language.
 - One Python file, standard library only. Runs on `127.0.0.1` only.
 
+
+### 2026-11-05：單則複製
+
+每則訊息旁新增複製鈕（⧉），只複製該則內文（不含引用列），按下後短暫顯示「已複製」。反白只能在單則內文裡進行，不會一路選到整串對話；手機長按改由系統原生反白，可只複製其中一段。手機或非安全連線改用備援複製時，改為唯讀並明確設定選取範圍，修正部分手機複製不到的問題。
 
 ### 2026-10-30：主持讀取輸出限制
 
