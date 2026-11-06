@@ -455,7 +455,7 @@ def others_of(room, seat, lang=None):
     return ("、" if lang == "zh-TW" else " and ").join(o) or ("（無）" if lang == "zh-TW" else "(nobody)")
 
 
-def new_room(title, topic, seat_cfg, project, lead, mode, lang, seats):
+def new_room(title, topic, seat_cfg, project, lead, mode, lang, seats, auto=False):
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
     slug = re.sub(r"[^0-9A-Za-z一-鿿]+", "-", title).strip("-")[:24] or "meeting"
     rid = f"{stamp}-{slug}"
@@ -465,7 +465,7 @@ def new_room(title, topic, seat_cfg, project, lead, mode, lang, seats):
             rid = f"{base}-{i}"
             i += 1
         meta = {"title": title, "topic": topic, "created": now_iso(), "closed": False, "lang": lang, "seats": seats,
-                "seat_cfg": seat_cfg, "project": project, "lead": lead, "mode": mode}
+                "seat_cfg": seat_cfg, "project": project, "lead": lead, "mode": mode, "auto": bool(auto)}
         if lead:
             meta["worktree"], meta["branch"], meta["git_common"] = make_worktree(project, rid, lang)
             meta["direct"] = LEAD_DIRECT
@@ -476,6 +476,8 @@ def new_room(title, topic, seat_cfg, project, lead, mode, lang, seats):
     r.add("system", tx(r, "start", title=title, project=project, mode=tx(r, "modes")[mode], lead=tx(r, "leads")[lead]))
     if lead:
         r.add("system", tx(r, "worktree_direct" if meta.get("direct") else "worktree", path=meta["worktree"], branch=meta["branch"]))
+    if auto:   # 設定檔帶 "auto": true 就從第一則起自主進行(接續會議沿用上一場的設定,不用等主持人再按一次)
+        r.add("system", tx(r, "auto_on", n=AUTO_RUN_LIMIT))
     return r
 
 
@@ -2119,7 +2121,7 @@ class H(BaseHTTPRequestHandler):
         remember_models({k: v for k, v in given.items() if k in seats})
         remember_project(proj)
         try:
-            r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats)
+            r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats, auto=bool(b.get("auto")))
         except RuntimeError as e:
             return self._send(400, {"error": str(e)})
         started = {}

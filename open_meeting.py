@@ -20,10 +20,12 @@ meeting.json (UTF-8):
    "mode": "discuss" | "review",
    "lead": "" | "Claude" | "GPT" | "Gemini",
    "seats": ["Claude", "GPT", "Gemini"],
-   "seat_cfg": {"GPT": {"model": "", "effort": ""}}}
+   "seat_cfg": {"GPT": {"model": "", "effort": ""}},
+   "auto": true}
 
-"seats" and "seat_cfg" are optional: without "seats" the meeting starts empty and you click Invite in the page;
-without "seat_cfg" each AI uses the model you picked last time.
+"seats", "seat_cfg" and "auto" are optional: without "seats" the meeting starts empty and you click Invite in the page;
+without "seat_cfg" each AI uses the model you picked last time; "auto": true starts the meeting in autonomous mode
+right away (use it when you reopen a meeting that was already autonomous, so nobody has to notice and click the button).
 Pass non-ASCII text through the file, not the command line (Windows shells may re-encode it).
 """
 BASE = f"http://127.0.0.1:{os.environ.get('MEETING_PORT', '7720')}"
