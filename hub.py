@@ -54,6 +54,7 @@ DEFAULT_PROJECT = os.path.abspath(os.environ.get("MEETING_PROJECT") or os.getcwd
 LOCAL = _data_home()
 DATA = os.path.join(LOCAL, "rooms")
 EXPORT_SUBDIR = os.environ.get("MEETING_EXPORT_DIR", os.path.join("docs", "meetings"))
+LEN_WARN, LEN_LIMIT = 1800, 2000   # 一場會議的則數:到 LEN_WARN 提醒、到 LEN_LIMIT 要求收尾另開新會議
 PORT = int(os.environ.get("MEETING_PORT", "7720"))
 ALLOWED_ORIGINS = {o.strip().rstrip("/") for o in os.environ.get("MEETING_ALLOWED_ORIGINS", "").split(",") if o.strip()}
 DEFAULT_LANG = os.environ.get("MEETING_LANG", "en")
@@ -248,6 +249,8 @@ T = {
         "limit_hit": "{seat} hit its usage limit (resets: {when}) and left the meeting automatically; click Invite to bring it back once the limit resets.",
         "resumed": "The meeting room restarted; {seat} rejoined.",
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
+        "len_warn": "This meeting has reached {n} messages. Long meetings get hard to follow: the host should start wrapping up and continue in a new meeting at 2,000.",
+        "len_over": "This meeting has {n} messages, over the 2,000 limit. Host: ask each seat for a summary (conclusions, rejected ideas, open items, file paths), put them in a new meeting's topic, then close this one and reopen.",
         "invited": "The {host} invited {seat} ({label}).",
         "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in the isolated copy "
                     "{path}; everyone else only reads.",
@@ -312,6 +315,8 @@ T = {
         "seat_fail": "{seat} 啟動失敗:{err}",
         "model_changed": "{seat} 改用 {label},重新入席。",
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
+        "len_warn": "本場會議已 {n} 則。太長的會議後面會難回頭讀:主持請準備收尾,到 2,000 則就另開新會議接續。",
+        "len_over": "本場會議已 {n} 則,超過 2,000 則上限。主持請收尾:請各席交摘要(結論、已否決、未完事項、檔案路徑),整理成新會議的議題後散會、重開。",
         "limit_hit": "{seat} 的用量已達上限(恢復時間:{when}),已自動退席;額度恢復後要請它回來請按「邀請」。",
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
@@ -390,6 +395,13 @@ class Room:
             self.msgs.append(m)
             with open(os.path.join(self.dir, "log.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps(m, ensure_ascii=False) + "\n")
+                n = m["seq"]
+                # 會議長度上限:1,800 則提醒一次,2,000 則起每 100 則要求主持收尾重開(系統訊息本身不觸發)
+                if who != "system" and (n == LEN_WARN or (n >= LEN_LIMIT and n % 100 == 0)):
+                    sm = {"seq": n + 1, "who": "system", "text": tx(self, "len_warn" if n < LEN_LIMIT else "len_over", n=n),
+                          "imgs": [], "at": now_iso()}
+                    self.msgs.append(sm)
+                    f.write(json.dumps(sm, ensure_ascii=False) + "\n")
             self.cond.notify_all()
             return m
 
