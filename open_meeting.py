@@ -24,8 +24,8 @@ meeting.json (UTF-8):
    "auto": true}
 
 "seats", "seat_cfg" and "auto" are optional: without "seats" the meeting starts empty and you click Invite in the page;
-without "seat_cfg" each AI uses the model you picked last time; "auto": true starts the meeting in autonomous mode
-right away (use it when you reopen a meeting that was already autonomous, so nobody has to notice and click the button).
+without "seat_cfg" each AI uses the model you picked last time. Meetings opened with this script start in autonomous
+mode unless the file says "auto": false.
 Pass non-ASCII text through the file, not the command line (Windows shells may re-encode it).
 """
 BASE = f"http://127.0.0.1:{os.environ.get('MEETING_PORT', '7720')}"
@@ -55,6 +55,7 @@ def main():
     with open(sys.argv[1], encoding="utf-8") as f:
         body = json.load(f)
     body.setdefault("project", os.getcwd())
+    body.setdefault("auto", True)
     req = urllib.request.Request(BASE + "/api/rooms", data=json.dumps(body).encode("utf-8"),
                                  headers={"Content-Type": "application/json"})
     try:
@@ -66,7 +67,7 @@ def main():
         print(f"Cannot reach the meeting room at {BASE}. Start it first (start_bg.ps1 / start_bg.sh).")
         sys.exit(1)
     url = BASE + "/#" + urllib.parse.quote(r["id"])
-    print(json.dumps({"id": r["id"], "url": url, "seats": r["seats"], "opened_in": open_tab(url)}, ensure_ascii=False))
+    print(json.dumps({"id": r["id"], "url": url, "seats": r["seats"], "auto": bool(body["auto"]), "opened_in": open_tab(url)}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
