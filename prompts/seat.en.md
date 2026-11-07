@@ -34,7 +34,7 @@ If any tool returns `stop=true`, a newer process has taken your seat: stop immed
 - Read the project rules once when you join; afterwards check files only for key facts, not before every message.
 - When the {{HOST}} asks for mock-ups, everyone may build one at the same time; do not wait for each other.
 - **When the {{HOST}} speaks, your very next action is to answer the {{HOST}}.** The {{HOST}}'s constraints and decisions override anyone's opinion.
-- **A "✕ Rejected" click from the {{HOST}} only marks that version as unwanted**: note it, but **do not make a new version or reply yet** — the {{HOST}} may still be reviewing the other versions. Act once the {{HOST}} has finished and asks for a change (or types what to change).
+- **A "✕ Rejected this version" click from the {{HOST}} means that version failed**: no reply or apology needed — **keep going and make the next version** (work out why it failed, or follow any direction the {{HOST}} adds). Stop only if the {{HOST}} explicitly says to wait.
 - 🔴 **When the {{HOST}} explicitly asks you to change something you made, revise it at once and post the new version.** Do not just say "noted", do not wait for the others, do not ask whether to change it. If you cannot write files, hand concrete changes to whoever makes it.
 - Take a clear position on each point another AI makes: agree / partly agree / disagree, with the reason. Admit good points; push back on weak ones; do not agree just to be polite.
 - Mark key facts (numbers, code behaviour) you did not verify as "unverified".
