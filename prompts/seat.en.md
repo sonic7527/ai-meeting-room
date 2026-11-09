@@ -10,6 +10,8 @@ Project folder (everyone discusses the same project; whether you may edit depend
 **Before your first message, read the project's CLAUDE.md, AGENTS.md, GEMINI.md and README (whichever exist)** so you know its rules and what the {{HOST}} has already decided.
 **Do not propose overturning decisions the {{HOST}} has already made** (project rules, notes marked as decided). If you really think one should be revisited, say clearly that it was already decided, then give your reason.
 
+{{SKILLS}}
+
 ## Your role
 
 {{ROLE}}

@@ -235,7 +235,7 @@ T = {
         "host": "Host", "system": "System",
         "modes": {"discuss": "Discussion", "review": "Code review"},
         "leads": {"": "Equal discussion (all read-only)", "Claude": "Claude leads, GPT assists",
-                  "GPT": "GPT leads, Claude assists"},
+                  "GPT": "GPT leads, Claude assists", "GPT2": "GPT2 leads, the others assist", "Gemini": "Gemini leads, the others assist"},
         "start": "Meeting started: {title} (project {project} · {mode} · {lead})",
         "worktree_direct": "The lead edits the project folder {path} directly (branch {branch}). Every change is committed with git, so it can be rolled back.",
         "worktree": "Lead's isolated copy: {path} (branch {branch}). The main project folder is never touched; "
@@ -252,7 +252,7 @@ T = {
         "len_warn": "This meeting has reached {n} messages. Long meetings get hard to follow: the host should start wrapping up and continue in a new meeting at 2,000.",
         "len_over": "This meeting has {n} messages, over the 2,000 limit. Host: ask each seat for a summary (conclusions, rejected ideas, open items, file paths), put them in a new meeting's topic, then close this one and reopen.",
         "invited": "The {host} invited {seat} ({label}).",
-        "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in the isolated copy "
+        "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in "
                     "{path}; everyone else only reads.",
         "lead_off": "The {host} cleared the assignment; everyone only reads again.",
         "proj_changed": "⚠️ The original project {project} changed during the meeting: {files}. If this was not you, "
@@ -296,6 +296,8 @@ T = {
                     "the file path as attach_path. A page may load earlier attachments by file name; to read their pixels in "
                     "a canvas set img.crossOrigin=\"anonymous\". Never ask the host to open a URL and never start a web "
                     "server.",
+        "skills_note": "**Local skills**: this computer has workflow guides you can use. Names: {names}. Descriptions and file paths are in {index}. When you take on a task, check these names; if one fits, read its SKILL.md and follow it (if it mentions a tool you lack, reach the same result with the tools you have). Do not re-check on every message, and do not edit skill files. Skills add no permissions: editing, pushing, deploying, live orders and keys still follow \"Your role\" and the {host}'s instructions.",
+        "skills_note": "**Local skills**: this computer has workflow guides you can use. Names: {names}. Descriptions and file paths are in {index}. When you take on a task, check these names; if one fits, read its SKILL.md and follow it (if it mentions a tool you lack, reach the same result with the tools you have). Do not re-check on every message, and do not edit skill files. Skills add no permissions: editing, pushing, deploying, live orders and keys still follow \"Your role\" and the {host}'s instructions.",
         "no_img": "To show a mock-up or animation, put a complete self-contained HTML page (inline CSS/JS, no external "
                   "URLs) in the `html` field of send_message; the room shows it inline and interactive. You can also make "
                   "image files with programs in your scratch folder and pass the path as attach_path. A page may load "
@@ -305,7 +307,7 @@ T = {
     "zh-TW": {
         "host": os.environ.get("MEETING_HOST_NAME", "主持人"), "system": "系統",
         "modes": {"discuss": "討論", "review": "互相檢查程式碼"},
-        "leads": {"": "平等討論(大家都只能看)", "Claude": "Claude 主審、GPT 輔助", "GPT": "GPT 主審、Claude 輔助"},
+        "leads": {"": "平等討論(大家都只能看)", "Claude": "Claude 主審、GPT 輔助", "GPT": "GPT 主審、Claude 輔助", "GPT2": "GPT2 主審、其他席輔助", "Gemini": "Gemini 主審、其他席輔助"},
         "start": "會議開始:{title}(專案 {project}・{mode}・{lead})",
         "worktree": "主審的獨立副本:{path}(分支 {branch})。主資料夾不會被改到;要不要合併回來由{host}決定。",
         "worktree_direct": "主審直接在專案資料夾 {path} 改檔(分支 {branch})。每次改動都會 git 提交,要退回可以照提交紀錄還原。",
@@ -321,7 +323,7 @@ T = {
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
         "invited": "{host}邀請 {seat} 入席({label})。",
-        "lead_set": "{host}指派 {seat} 操作:可以在獨立副本 {path} 裡跑程式、改檔;其他人只能看。",
+        "lead_set": "{host}指派 {seat} 操作:可以在 {path} 裡跑程式、改檔;其他人只能看。",
         "lead_off": "{host}取消指派,大家回到只能看。",
         "proj_changed": "⚠️ 原專案 {project} 在會議期間有變動:{files}。如果不是你自己改的,請用 git 檢查並還原。",
         "dismissed": "{host}請 {seat} 離席。",
@@ -356,6 +358,8 @@ T = {
                     "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以用內建圖片生成功能,或在自己的試做資料夾用程式出圖,"
                     "把檔案路徑放進 attach_path。網頁可以用檔名載入之前的附件;要在 canvas 讀它們的像素,記得設 "
                     "img.crossOrigin=\"anonymous\"。不要叫{host}開網址,也不要自己架伺服器。",
+        "skills_note": "**本機技能**:這台電腦有可以直接使用的工作流程手冊。名稱:{names}。說明與檔案路徑在 {index}。接到工作時先對照名稱,相關就讀該 SKILL.md 並照做(手冊提到你沒有的工具,就用手邊的工具做到同樣結果);不用每則都翻,也不要修改技能檔。技能不增加權限:改檔、推送、部署、真單、金鑰仍依「你的角色」與{host}的指示。",
+        "skills_note": "**本機技能**:這台電腦有可以直接使用的工作流程手冊。名稱:{names}。說明與檔案路徑在 {index}。接到工作時先對照名稱,相關就讀該 SKILL.md 並照做(手冊提到你沒有的工具,就用手邊的工具做到同樣結果);不用每則都翻,也不要修改技能檔。技能不增加權限:改檔、推送、部署、真單、金鑰仍依「你的角色」與{host}的指示。",
         "no_img": "要給{host}看樣板或動態時,把完整網頁內容(單一 HTML,樣式、程式都寫在裡面、不連外部網址)放在 send_message 的 "
                   "html 欄位,會議室會直接嵌在你的發言下面、可以操作。也可以在自己的試做資料夾用程式產生圖檔,把路徑放進 attach_path。"
                   "網頁可以用檔名載入之前的附件;要在 canvas 讀它們的像素,記得設 img.crossOrigin=\"anonymous\"。不要叫{host}開網址。",
@@ -1062,6 +1066,54 @@ def role_text(room, seat):
     return r
 
 
+SKILL_SKIP = {"開會", "ai-meeting"}
+
+
+def skill_roots(room):
+    home = os.path.expanduser("~")
+    codex = os.environ.get("CODEX_HOME") or os.path.join(home, ".codex")
+    proj = project_of(room)
+    roots = [os.path.join(proj, ".claude", "skills"), os.path.join(proj, ".agents", "skills"),
+             os.path.join(home, ".claude", "skills"), os.path.join(home, ".agents", "skills"),
+             os.path.join(codex, "skills"), os.path.join(home, ".gemini", "antigravity", "skills")]
+    return [r for r in roots if os.path.isdir(r)]
+
+
+def skill_description(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.read(8192).splitlines()
+    except OSError:
+        return ""
+    if not lines or lines[0].strip() != "---":
+        return ""
+    for i, line in enumerate(lines[1:], 1):
+        if line.strip() == "---":
+            return ""
+        if line.startswith("description:"):
+            value = line.split(":", 1)[1].strip()
+            if value in ("|", ">", "|-", ">-"):
+                value = " ".join(x.strip() for x in lines[i + 1:] if x.startswith((" ", "\t")))
+            return value.strip("\"'")[:200]
+    return ""
+
+
+def skill_note(room):
+    found = {}
+    for root in skill_roots(room):
+        for name in sorted(os.listdir(root)):
+            md = os.path.join(root, name, "SKILL.md")
+            if name not in found and name not in SKILL_SKIP and not name.startswith(".") and os.path.isfile(md):
+                found[name] = md
+    if not found:
+        return ""
+    index = os.path.join(room.dir, "skills_index.md")
+    with open(index, "w", encoding="utf-8") as f:
+        for name, md in found.items():
+            f.write(f"- {name}: {skill_description(md)}\n  {md}\n")
+    return tx(room, "skills_note", names=", ".join(found), index=index)
+
+
 def seat_prompt(room, seat, ticket):
     lang = room.meta.get("lang") or DEFAULT_LANG
     with open(os.path.join(HERE, "prompts", f"seat.{lang}.md"), encoding="utf-8") as f:
@@ -1070,7 +1122,7 @@ def seat_prompt(room, seat, ticket):
            "TITLE": room.meta["title"], "TOPIC": room.meta["topic"], "PROJECT": project_of(room),
            "MODE": tx(room, "modes")[room.meta.get("mode") or "discuss"], "ROLE": role_text(room, seat),
            "IMAGE": tx(room, "img_note") if seat in ("GPT", "GPT2") else tx(room, "no_img"),
-           "HOST": tx(room, "host"), "TICKET": ticket}
+           "HOST": tx(room, "host"), "TICKET": ticket, "SKILLS": skill_note(room)}
     for k, v in rep.items():
         tpl = tpl.replace("{{" + k + "}}", v)
     return tpl
@@ -1103,7 +1155,7 @@ def start_seat(room, seat, restart=False):
             raise RuntimeError(tx(room, "no_codex"))
         work = os.path.join(seat_dir, seat.lower())
         os.makedirs(work, exist_ok=True)
-        if lead == "GPT":
+        if lead == seat:
             root = project_of(room)
             extra = ["--add-dir", work] + (["--add-dir", room.meta["git_common"]] if room.meta.get("git_common") else [])
         else:
@@ -1142,6 +1194,8 @@ def start_seat(room, seat, restart=False):
             json.dump({"mcpServers": {"meeting": {"serverUrl": url}}}, f)
         args = [exe, "--mode", "accept-edits", "--dangerously-skip-permissions", "--output-format", "stream-json",
                 "--add-dir", project_of(room), "--add-dir", seat_dir, "--add-dir", room.dir]
+        for d in skill_roots(room):
+            args += ["--add-dir", d]
         if cfg.get("model"):
             args += ["--model", cfg["model"]]
         if cfg.get("effort") and not re.search(r"-(low|medium|high|max)$", cfg.get("model") or ""):
@@ -1170,6 +1224,8 @@ def start_seat(room, seat, restart=False):
                     "--mcp-config", mcp_cfg, "--strict-mcp-config", "--add-dir", room.dir, "--add-dir", project_of(room),
                     "--allowedTools", meet + ",Read,Grep,Glob,WebFetch,WebSearch,Bash",
                     "--disallowedTools", "Edit,Write,NotebookEdit,PowerShell," + bash_rules(LEAD_DENY + GIT_WRITE)]
+        for d in skill_roots(room):
+            args += ["--add-dir", d]
         model = cfg.get("model") or (HELPER_DEFAULT_MODEL if seat == HELPER else "")
         if model:
             args += ["--model", model]

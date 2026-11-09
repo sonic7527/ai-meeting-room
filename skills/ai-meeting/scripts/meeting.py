@@ -102,6 +102,9 @@ def main():
     rooms = sub.add_parser('rooms')
     rooms.add_argument('--start', type=int, default=0)
     rooms.add_argument('--max-bytes', type=int, default=3072)
+    assign = sub.add_parser('lead')
+    assign.add_argument('room')
+    assign.add_argument('--seat', choices=('Claude', 'GPT', 'GPT2', 'Gemini', 'none'), required=True)
     for cmd in ('read', 'say', 'watch', 'snapshot'):
         q = sub.add_parser(cmd)
         q.add_argument('room')
@@ -126,6 +129,10 @@ def main():
         p.error('--base 須為 http(s) 主機網址，不可含子路徑。')
     if a.cmd == 'rooms':
         result = room_page(request(base, '/api/rooms'), a.start, a.max_bytes)
+    elif a.cmd == 'lead':
+        seat = '' if a.seat == 'none' else a.seat
+        path = '/api/rooms/' + urllib.parse.quote(a.room, safe='') + '/lead'
+        result = request(base, path, {'seat': seat})
     else:
         path = '/api/rooms/' + urllib.parse.quote(a.room, safe='') + '/messages'
         if a.cmd == 'snapshot':
