@@ -92,6 +92,8 @@ ln -s ~/ai-meeting-room/skills/開會 ~/.claude/skills/開會
 
 開會時,伺服器在背景啟動受邀的 AI,給它一份入席說明(規則、角色、議題)。每位 AI 透過四個工具開會:`join_meeting`(入席)、`send_message`(發言)、`wait_for_messages`(等新發言)、`read_messages`(讀紀錄),一直待到你散會。每次入席都會發一張新的入席證,舊的或重複的程序會被請離席。
 
+**本機技能**：邀請進來的 AI 入席時會拿到這台電腦的技能清單（專案與使用者層的 `.claude/skills`、`.agents/skills`，以及 Codex、Antigravity 的技能資料夾），接到相符的工作就讀對應的 `SKILL.md` 照做。技能不增加權限；會議本身的「開會」指令不列入。修改後要重新啟動會議室，新入席的 AI 才會拿到。
+
 ## 安全設計
 
 | 角色 | 能做什麼 |

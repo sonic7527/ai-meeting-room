@@ -104,6 +104,8 @@ Then just tell Claude "start a meeting about …": it starts the room, opens an 
 
 When a meeting starts, the hub launches each invited AI as a background process with a seat prompt (rules, role, topic). Each AI calls four MCP tools — `join_meeting`, `send_message`, `wait_for_messages` (long-poll), `read_messages` — and keeps listening until you close the meeting. Every launch gets a fresh seat ticket, so an old or duplicate process is told to stop.
 
+**Local skills**: each invited AI receives this computer's skill list when it joins (project and user `.claude/skills` and `.agents/skills`, plus the Codex and Antigravity skill folders) and reads the matching `SKILL.md` when a task fits. Skills add no permissions, and the meeting command itself is left out. Restart the meeting room after updating so newly seated AIs get the list.
+
 ## Safety model
 
 | Role | Can do |
