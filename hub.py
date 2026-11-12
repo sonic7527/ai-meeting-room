@@ -689,11 +689,12 @@ CLAUDE_MODELS = [
     {"id": "fable", "label": "Fable", "latest": "5.1"},
     {"id": "opus", "label": "Opus", "latest": "5.5"},
     {"id": "sonnet", "label": "Sonnet", "latest": "5.5"},
-    {"id": "haiku", "label": "Haiku", "latest": "4.5"},
+    {"id": "haiku", "label": "Haiku", "latest": "5.5"},
+    {"id": "claude-fable-5-2", "label": "Fable 5.2", "pinned": True},
     {"id": "claude-fable-5-1", "label": "Fable 5.1", "pinned": True},
     {"id": "claude-opus-5-5", "label": "Opus 5.5", "pinned": True},
     {"id": "claude-sonnet-5-5", "label": "Sonnet 5.5", "pinned": True},
-    {"id": "claude-haiku-4-5-20251001", "label": "Haiku 4.5", "pinned": True},
+    {"id": "claude-haiku-5-5", "label": "Haiku 5.5", "pinned": True},
 ]
 CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
 _AGY_MODELS = {"t": 0, "v": []}
