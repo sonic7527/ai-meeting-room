@@ -40,6 +40,7 @@ description: 開一場「使用者＋Claude／GPT／Gemini」AI 會議(電腦裡
  "auto": true}
 ```
 
+- `topic`:**專案裡有 `docs/meetings/CONDITION_CARD.md`(開會條件卡)就把它的「五題」全文放在 topic 最前面**,後面才接背景與題目(用戶 2026-11-13 訂:「未來開會都要附上這張條件卡討論」)。續開、收尾重開的新會議一樣要附。會議進行中有席位沒答五題就引用舊否決案或只用美元算,主持當場拉回。專案沒有這個檔就照舊。
 - `project`:**就是目前所在的專案資料夾**(`git rev-parse --show-toplevel`),用戶明說別的專案才換。
 - `lang`:跟用戶的語言一致(`zh-TW` 或 `en`)。
 - `mode`:`discuss`(討論,預設);用戶要檢查程式用 `review`。
