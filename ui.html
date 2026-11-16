@@ -269,7 +269,7 @@ const I18N={
    model:"Model",effort:"Reasoning effort",dflt:"default",latestVer:"now",pinnedVer:"fixed version",notInstalled:"Not installed",helper:"Helper",helperNote:"Joins every meeting (a cheaper Claude for repetitive work: renders, side-by-sides, checks); acts only when called with @Helper.",notSigned:"Not signed in",
    allowBtn:"Allow meeting tools",allowNote:"Antigravity CLI runs in the background and cannot ask for permission. This adds one rule to its settings that allows only the meeting-room tools.",
    modes:{discuss:"Discussion",review:"Code review"},equal:"No lead — equal discussion (all read-only)",leads:n=>n+" leads (edits code in an isolated git copy)",
-   state:{listening:"listening",thinking:"working",away:"away"},busyMin:m=>` ${m} min`,autoOffSure:"Turn off autonomous mode? The AIs will stop after {n} messages in a row and wait for you.",host:"Host",system:"System",
+   ext:"joined from outside, last spoke",state:{listening:"listening",thinking:"working",away:"away"},busyMin:m=>` ${m} min`,autoOffSure:"Turn off autonomous mode? The AIs will stop after {n} messages in a row and wait for you.",host:"Host",system:"System",
    info:{project:"Project",type:"Type",role:"Roles",copy:"Lead's copy"},replied:" replied",pending:" pending",
    noteLive:"The AIs speak for themselves here; interject any time and they answer you first.",
    noteRun:(n)=>"The AIs have sent "+n+" messages in a row and are waiting for you.",
@@ -297,7 +297,7 @@ const I18N={
    model:"模型",effort:"思考深度",dflt:"預設",latestVer:"目前",pinnedVer:"固定版本",notInstalled:"未安裝",helper:"助手",helperNote:"每場會議都會入席(較便宜的 Claude,做批次算圖、並排片、跑檢查這類重複工作),只在有人寫「@助手」點名時才動作。",notSigned:"尚未登入",
    allowBtn:"允許會議室工具",allowNote:"Antigravity 命令列程式在背景執行時無法跳出詢問,需要在它的設定裡加一條規則,只允許會議室的工具。",
    modes:{discuss:"討論",review:"互相檢查程式碼"},equal:"平等討論(大家都只能看)",leads:n=>n+" 主審(在獨立副本改程式)",
-   state:{listening:"在聽",thinking:"工作中",away:"不在席"},busyMin:m=>` ${m} 分鐘`,autoOffSure:"確定關閉自主會議?關閉後 AI 連續發言 {n} 則就會停下來等你。",host:"主持人",system:"系統",
+   ext:"外部加入,最後發言",state:{listening:"在聽",thinking:"工作中",away:"不在席"},busyMin:m=>` ${m} 分鐘`,autoOffSure:"確定關閉自主會議?關閉後 AI 連續發言 {n} 則就會停下來等你。",host:"主持人",system:"系統",
    info:{project:"專案",type:"類型",role:"角色",copy:"主審副本"},replied:" 已回應",pending:" 待回應",
    noteLive:"AI 會在這裡各自發言;你隨時可以插話,他們會先回應你。",
    noteRun:(n)=>"AI 已連講 "+n+" 則,正在等你發言。",
@@ -404,11 +404,13 @@ function add(m){
   if(m.who==="user"){const ack=document.createElement("div");ack.className="ack";ack.dataset.seq=m.seq;box.appendChild(ack);}
   log.appendChild(box);
   if(SEQS[m.who])SEQS[m.who].push(m.seq);
+  if(m.who!=="user"&&m.who!=="system")EXT[m.who]=m.at;
 }
 function refreshAcks(){
   document.querySelectorAll(".ack").forEach(a=>{const q=+a.dataset.seq;a.textContent="";
     for(const s of curSeats){if(s==="Helper")continue;const ok=(SEQS[s]||[]).some(x=>x>q);const sp=document.createElement("span");sp.className=ok?"ok":"wait";sp.textContent=whoName(s)+(ok?L().replied:L().pending);a.appendChild(sp);}});
 }
+const EXT={};
 function renderSeats(j){
   const box=$("seats");box.textContent="";
   for(const s of curSeats){const el=document.createElement("span");el.className="seat "+j.seats[s];el.dataset.seat=s;
@@ -422,13 +424,15 @@ function renderSeats(j){
     if(!j.meta.closed){const x=document.createElement("button");x.className="leave";x.textContent=L().leave;x.title=L().leave;x.setAttribute("aria-label",whoName(s)+" "+L().leave);
       x.onclick=async()=>{if(!confirm(L().leaveSure(whoName(s))))return;x.disabled=true;try{await post(R(cur)+"/dismiss",{seat:s});poll();}catch(e){$("note").textContent=e.message;x.disabled=false;}};el.appendChild(x);}
     box.appendChild(el);}
+  for(const w of Object.keys(EXT)){if(curSeats.includes(w))continue;const el=document.createElement("span");el.className="seat ext "+((Date.now()-new Date(EXT[w]).getTime()<30*60000&&!j.meta.closed)?"listening":"away");const i=document.createElement("i");const sm=document.createElement("small");sm.textContent=(L().ext||"external")+" · "+hm(EXT[w]);el.append(i,document.createTextNode(w+" "),sm);box.appendChild(el);}
   if(!curSeats.length&&!j.meta.closed){const h=document.createElement("span");h.className="noseat";h.textContent=L().noSeats;box.appendChild(h);}
 }
 
 let polling=false,openTok=0;
-let pollAgain=false;
+let pollAgain=false,hiddenPollAt=0;
 async function poll(){
   if(!cur)return;
+  if(document.hidden){if(Date.now()-hiddenPollAt<15000)return;hiddenPollAt=Date.now();}
   if(polling){pollAgain=true;return;}
   polling=true;const room=cur;
   try{
@@ -450,7 +454,7 @@ async function poll(){
 }
 async function open(id){
   const tok=++openTok;
-  cur=id;last=0;$("log").textContent="";clearInterval(timer);for(const k in SEQS)delete SEQS[k];
+  cur=id;last=0;$("log").textContent="";clearInterval(timer);for(const k in SEQS)delete SEQS[k];for(const k in EXT)delete EXT[k];
   try{const j=await api(R(id)+"/messages?after=0");const m=j.meta;
     $("title").textContent=m.title;$("brief").hidden=false;$("topic").textContent=m.topic;
     $("briefPeek").textContent=(m.topic||"").split("\n").find(s=>s.trim())||"";
@@ -659,7 +663,8 @@ $("form2").addEventListener("submit",async e=>{e.preventDefault();$("go2").disab
 applyLang();
 api("/api/info").then(i=>{if(i.host_name&&i.host_name!==I18N["zh-TW"].host){const z=I18N["zh-TW"];z.say=z.say.replace(z.host,i.host_name);z.sayShort=z.sayShort.replace(z.host,i.host_name);z.host=i.host_name;if(LANG!=="en")applyLang();}}).catch(()=>{});
 const h=decodeURIComponent(location.hash.slice(1));if(h)open(h);
-setInterval(loadList,10000);
+setInterval(()=>{if(!document.hidden)loadList();},10000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){poll();loadList();}});
 </script>
 <script>(()=>{const b=document.getElementById("sideBtn");const set=c=>{document.body.classList.toggle("nocol",c);b.textContent=c?"▶":"◀";try{localStorage.setItem("navCollapsed",c?"1":"")}catch(e){}};let c0=false;try{c0=localStorage.getItem("navCollapsed")==="1"}catch(e){}set(c0);b.onclick=()=>set(!document.body.classList.contains("nocol"));})();</script>
 </body></html>
