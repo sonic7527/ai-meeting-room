@@ -81,7 +81,7 @@ New-Item -ItemType Junction -Path "$HOME\.claude\skills\開會" -Target "$HOME\a
 ln -s ~/ai-meeting-room/skills/開會 ~/.claude/skills/開會
 ```
 
-之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開一場空的會議、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。開會期間 Claude 會用 `~/.claude/hooks/meeting_watch.py` 常駐監看每一則新訊息並派工(30 分鐘到期重掛);搭配 Stop hook `check_meeting_watch.py`,監看心跳超過 2 分鐘沒更新就擋下 Claude 的回覆、要求先掛監看(這兩支在 Claude 的設定資料夾,不在本倉庫)。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
+之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開一場空的會議、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。開會期間 Claude 會用 `~/.claude/hooks/meeting_watch.py` 常駐監看每一則新訊息並派工(30 分鐘到期重掛);搭配 Stop hook `check_meeting_watch.py`,監看心跳超過 2 分鐘沒更新就擋下 Claude 的回覆、要求先掛監看(這兩支在 Claude 的設定資料夾,不在本倉庫)。主持派工前與每 30 分鐘會實查各席額度(GPT 讀 Codex 紀錄的用量、Claude 查用量工具),用量高的席位改派別人。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
 
 ## 運作方式
 
