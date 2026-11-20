@@ -377,6 +377,31 @@ def tx(room_or_lang, key, **kw):
     return v
 
 
+# 附件檔名一經上傳就不會變（同名覆蓋極少），手機可快取一週；縮圖存在房間資料夾的 .thumbs/
+FILE_CACHE = "private, max-age=604800"
+
+
+def thumb_path(src, width):
+    """回傳 src 圖片縮到 width 寬的 JPEG 路徑（已存在就直接用）；失敗回 None，改送原圖。"""
+    try:
+        d = os.path.join(os.path.dirname(src), ".thumbs")
+        os.makedirs(d, exist_ok=True)
+        dst = os.path.join(d, f"{os.path.basename(src)}.{width}.jpg")
+        if os.path.isfile(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+            return dst
+        from PIL import Image
+        with Image.open(src) as im:
+            im = im.convert("RGB")
+            if im.width > width:
+                im = im.resize((width, max(1, round(im.height * width / im.width))), Image.LANCZOS)
+            tmp = dst + ".tmp"
+            im.save(tmp, "JPEG", quality=82, optimize=True, progressive=True)
+        os.replace(tmp, dst)
+        return dst
+    except Exception:
+        return None
+
+
 class Room:
     def __init__(self, rid, meta):
         self.id = rid
@@ -1754,7 +1779,8 @@ class H(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        if "Cache-Control" not in (headers or {}):
+            self.send_header("Cache-Control", "no-store")
         for k, v in (headers or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -1986,7 +2012,13 @@ class H(BaseHTTPRequestHandler):
                 if not any(parts[2] in (m.get("imgs") or []) for m in msgs):
                     return self._send(404, {"error": "找不到附件"})
             if ext in MEDIA_EXT:
-                return self._send_file(p, MEDIA_EXT[ext])
+                return self._send_file(p, MEDIA_EXT[ext], headers={"Cache-Control": FILE_CACHE})
+            if ext in IMG_EXT and ext != ".gif":
+                w = (parse_qs(u.query).get("w") or [""])[0]
+                if w.isdigit() and 64 <= int(w) <= 2560:
+                    tp = thumb_path(p, int(w))
+                    if tp:
+                        return self._send_file(tp, "image/jpeg", headers={"Cache-Control": FILE_CACHE})
             if ext not in IMG_EXT and ext not in PAGE_EXT:
                 return self._send_file(p, "application/octet-stream", headers={
                     "Content-Disposition": "attachment; filename=attachment; filename*=UTF-8''" + quote(attachment_label(parts[2]), safe=""),
@@ -1998,7 +2030,7 @@ class H(BaseHTTPRequestHandler):
                                   headers={"Content-Security-Policy": "sandbox allow-scripts allow-forms allow-modals",
                                            "X-Content-Type-Options": "nosniff"})
             return self._send(200, data, "image/jpeg" if ext in (".jpg", ".jpeg") else f"image/{ext[1:]}",
-                              headers={"Access-Control-Allow-Origin": "*"})
+                              headers={"Access-Control-Allow-Origin": "*", "Cache-Control": FILE_CACHE})
         return self._send(404, {"error": "not found"})
 
     def do_DELETE(self):

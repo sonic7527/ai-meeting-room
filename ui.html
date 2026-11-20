@@ -381,7 +381,7 @@ function add(m){
     else if(/\.(mp4|webm|mov)$/i.test(f)){const v=document.createElement("video");v.src=src;v.controls=true;v.preload="none";v.playsInline=true;body.appendChild(v);}
     else if(/\.(mp3|m4a|wav)$/i.test(f)){const au=document.createElement("audio");au.src=src;au.controls=true;au.preload="none";body.appendChild(au);}
     else if(/\.(png|jpe?g|webp|gif)$/i.test(f)){const a=document.createElement("a");a.href=src;a.target="_blank";a.rel="noopener";
-      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.src=src;im.alt=m.who;a.appendChild(im);body.appendChild(a);
+      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.src=/\.gif$/i.test(f)?src:src+"?w="+(window.innerWidth<800?960:1600);im.alt=m.who;a.appendChild(im);body.appendChild(a);
       im.onerror=()=>{a.textContent="📎 "+f+" · 圖片載入失敗，按這裡開新分頁看";a.className="file-attachment";};}
     else{const a=document.createElement("a");a.href=src;a.download=f.replace(/^up_[0-9a-f]+_/i,"");a.className="file-attachment";
       a.textContent="📎 "+a.download+" · 下載附件";body.appendChild(a);}}

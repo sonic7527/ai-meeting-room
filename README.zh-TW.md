@@ -81,7 +81,7 @@ New-Item -ItemType Junction -Path "$HOME\.claude\skills\開會" -Target "$HOME\a
 ln -s ~/ai-meeting-room/skills/開會 ~/.claude/skills/開會
 ```
 
-之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開一場空的會議、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。開會期間 Claude 會用 `~/.claude/hooks/meeting_watch.py` 常駐監看每一則新訊息並派工(30 分鐘到期重掛);搭配 Stop hook `check_meeting_watch.py`,監看心跳超過 2 分鐘沒更新就擋下 Claude 的回覆、要求先掛監看(這兩支在 Claude 的設定資料夾,不在本倉庫)。主持派工前與每 30 分鐘會實查各席額度(GPT 讀 Codex 紀錄的用量、Claude 查用量工具),用量高的席位改派別人。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
+之後跟 Claude 說「開會討論……」,它會啟動會議室、用目前的專案開一場空的會議、在 Chrome 開新分頁,等你散會後讀逐字稿向你回報。開會期間 Claude 會用 `~/.claude/hooks/meeting_watch.py` 常駐監看每一則新訊息並派工(30 分鐘到期重掛);搭配 Stop hook `check_meeting_watch.py`,監看心跳超過 2 分鐘沒更新就擋下 Claude 的回覆、要求先掛監看(這兩支在 Claude 的設定資料夾,不在本倉庫)。圖片附件在網頁上先顯示壓縮過的小圖（`/files/...?w=960`，存在房間資料夾的 `.thumbs/`），點開才看原圖；附件允許瀏覽器快取一週，手機重新整理不用整批重下（2026-11-20：手機上一張 2 MB 原圖要 51 秒）。主持派工前與每 30 分鐘會實查各席額度(GPT 讀 Codex 紀錄的用量、Claude 查用量工具),用量高的席位改派別人。如果不是裝在 `~/ai-meeting-room`,請設定環境變數 `AI_MEETING_ROOM_DIR`。
 
 ## 運作方式
 
