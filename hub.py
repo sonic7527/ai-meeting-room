@@ -79,6 +79,14 @@ def calls_helper(m):
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 AUTO_RUN_LIMIT = int(os.environ.get("MEETING_AUTO_RUN_LIMIT", "120"))
 DONE_MARK = ("【階段成果】", "[MILESTONE]")
+# 2026-11-22 站長看 MetaGPT（每一關交固定格式文件、下一關只讀上游文件）後要加進會議程式：
+# ①以【交件】開頭的發言必須每欄都填、「檔案」欄寫的絕對路徑必須真的存在，否則不送出、退回給席位重發；
+# ②會議掛上派工佇列檔後，佇列裡「依賴：<檔案>」的待辦一旦檔案出現，就自動點名該席開工，不用等主持派。
+HANDOFF_MARK = ("【交件】", "[HANDOFF]")
+HANDOFF_FIELDS = {"zh-TW": ["檔案", "驗證", "下一件"], "en": ["Files", "Checked", "Next"]}
+PATH_RE = re.compile(r"(?:[A-Za-z]:[\\/]|~[\\/]|/)[^\s，。；、）)」」'\"`<>|*?]+")
+DEP_RE = re.compile(r"(?:依賴|depends)\s*[：:]\s*(\S+)", re.I)
+QUEUE_ITEM_RE = re.compile(r"^\s*[-*]\s*\[ \]\s*([0-9A-Za-z.]+)")
 
 
 def run_limit(room):
@@ -251,6 +259,13 @@ T = {
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "len_warn": "This meeting has reached {n} messages. Long meetings get hard to follow: the host should start wrapping up and continue in a new meeting at 2,000.",
         "len_over": "This meeting has {n} messages, over the 2,000 limit. Host: ask each seat for a summary (conclusions, rejected ideas, open items, file paths), put them in a new meeting's topic, then close this one and reopen.",
+        "handoff_fmt": "A message starting with [HANDOFF] is a hand-off: first line [HANDOFF] + what you delivered, then one line per field: {fields}. The first field lists absolute file paths; the room rejects the message if a field is missing or empty or a listed file does not exist.",
+        "handoff_bad": "Not sent - the hand-off is incomplete: {why}. Resend with one line per field: {fields} (absolute paths in the first field).",
+        "handoff_missing": "missing field '{f}'",
+        "handoff_empty": "field '{f}' is empty",
+        "handoff_nofile": "file not found: {p}",
+        "dep_ready": "[UPSTREAM READY] @{seat} item {num} was waiting for {p}; it now exists - start it.",
+        "queue_set": "Work queue attached: {p}. Items marked 'depends: <file>' will call their seat when the file appears.",
         "invited": "The {host} invited {seat} ({label}).",
         "lead_set": "The {host} assigned {seat} to operate: it may run programs and edit files in "
                     "{path}; everyone else only reads.",
@@ -319,6 +334,13 @@ T = {
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
         "len_warn": "本場會議已 {n} 則。太長的會議後面會難回頭讀:主持請準備收尾,到 2,000 則就另開新會議接續。",
         "len_over": "本場會議已 {n} 則,超過 2,000 則上限。主持請收尾:請各席交摘要(結論、已否決、未完事項、檔案路徑),整理成新會議的議題後散會、重開。",
+        "handoff_fmt": "以【交件】開頭的發言是交件單：第一行寫【交件】＋交了什麼，下面每行一欄：{fields}。第一欄寫檔案絕對路徑；缺欄、空欄或路徑不存在，會議室會直接退回不送出。",
+        "handoff_bad": "沒有送出，交件單不完整：{why}。照格式重發，每行一欄：{fields}（第一欄寫檔案絕對路徑）。",
+        "handoff_missing": "缺「{f}」欄",
+        "handoff_empty": "「{f}」欄是空的",
+        "handoff_nofile": "檔案不存在：{p}",
+        "dep_ready": "【上游到了】@{seat} 第 {num} 件等的檔案已出現：{p}，可以開工。",
+        "queue_set": "已掛上派工佇列：{p}。寫了「依賴：檔案」的待辦，檔案一出現就自動點名該席。",
         "limit_hit": "{seat} 的用量已達上限(恢復時間:{when}),已自動退席;額度恢復後要請它回來請按「邀請」。",
         "resumed": "會議室重新啟動,{seat} 重新入席。",
         "auto_gave_up": "{seat} 又意外離席({why}),不再自動請回;需要時按「請回席」。",
@@ -1653,6 +1675,75 @@ TOOLS = [
 ]
 
 
+def handoff_fields(room):
+    return room.meta.get("handoff_fields") or HANDOFF_FIELDS.get(room.meta.get("lang") or DEFAULT_LANG, HANDOFF_FIELDS["en"])
+
+
+def handoff_problems(room, text):
+    """【交件】訊息逐欄檢查：缺欄、空欄、「檔案」欄的絕對路徑不存在 → 回傳問題清單（空清單＝合格）"""
+    if not text.lstrip().startswith(HANDOFF_MARK):
+        return []
+    fields = handoff_fields(room)
+    pos = {}
+    for f in fields:
+        m = re.search(r"(?:^|\n)[ \t]*(?:[-*・]\s*)?" + re.escape(f) + r"\s*[：:]", text)
+        if m:
+            pos[f] = m
+    bad = [tx(room, "handoff_missing", f=f) for f in fields if f not in pos]
+    order = sorted(pos.items(), key=lambda kv: kv[1].start())
+    for i, (f, m) in enumerate(order):
+        end = order[i + 1][1].start() if i + 1 < len(order) else len(text)
+        val = text[m.end():end].strip()
+        if not val:
+            bad.append(tx(room, "handoff_empty", f=f))
+        elif f == fields[0]:   # 第一欄是檔案欄：寫到的絕對路徑一律要存在
+            for p in PATH_RE.findall(val):
+                p = p.rstrip(".,;:")
+                if not os.path.exists(os.path.expanduser(p)):
+                    bad.append(tx(room, "handoff_nofile", p=p))
+    return bad
+
+
+def queue_deps(room):
+    """讀會議掛的派工佇列（Markdown：## 席位名 底下 - [ ] 編號. 內容 … 依賴：路徑），回傳 (席位, 編號, 路徑)"""
+    path = room.meta.get("queue")
+    if not path or not os.path.isfile(path):
+        return []
+    out, seat = [], None
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("## "):
+                seat = line[3:].strip()
+                continue
+            m = QUEUE_ITEM_RE.match(line)
+            d = DEP_RE.search(line) if m and seat else None
+            if d:
+                p = d.group(1).rstrip("）)」。，,;；")
+                if not os.path.isabs(os.path.expanduser(p)):
+                    p = os.path.join(room.meta.get("project") or "", p)
+                out.append((seat, m.group(1).rstrip("."), os.path.expanduser(p)))
+    return out
+
+
+def dep_watch():
+    while True:
+        time.sleep(20)
+        for room in list(ROOMS.values()):
+            if room.meta.get("closed") or not room.meta.get("queue"):
+                continue
+            try:
+                fired = room.meta.setdefault("dep_fired", [])
+                for seat, num, p in queue_deps(room):
+                    key = f"{seat}|{num}|{p}"
+                    if key in fired or not os.path.exists(p):
+                        continue
+                    fired.append(key)
+                    room.save_meta()
+                    room.add("system", tx(room, "dep_ready", seat=seat, num=num, p=p))
+            except Exception as e:
+                print("dep_watch:", room.id, e, flush=True)
+
+
 def fmt(room, msgs):
     host = tx(room, "host")
     return [{"seq": m["seq"], "who": host if m["who"] == "user" else seat_name(room, m["who"]), "text": m["text"],
@@ -1674,6 +1765,7 @@ def call_tool(name, a):
     if name == "join_meeting":
         return {"title": room.meta["title"], "topic": room.meta["topic"], "you": seat, "closed": closed,
                 "rules": tx(room, "rules", n=run_limit(room)), "messages": fmt(room, room.msgs),
+                "handoff_format": tx(room, "handoff_fmt", fields="、".join(handoff_fields(room))),
                 "last_seq": len(room.msgs)}
     if name == "read_messages":
         after = int(a.get("after_seq", 0))
@@ -1686,6 +1778,10 @@ def call_tool(name, a):
         text = (a.get("text") or "").strip()
         if not text:
             return {"ok": False, "reason": tx(room, "empty")}
+        bad = handoff_problems(room, text)
+        if bad:
+            return {"ok": False, "reason": tx(room, "handoff_bad", why="；".join(bad),
+                                              fields="、".join(handoff_fields(room)))}
         imgs = []
         page = a.get("html")
         if isinstance(page, str) and page.strip():
@@ -2103,6 +2199,21 @@ class H(BaseHTTPRequestHandler):
                     r.save_meta()
                     r.add("system", "【議題已更新】所有席位以會議上方議題為準：" + chr(10) + t)
                     return self._send(200, {"ok": True})
+                if act == "queue":   # 掛派工佇列檔（空字串＝拿掉）
+                    q = str(b.get("path") or "").strip()
+                    if q and not os.path.isfile(q):
+                        return self._send(400, {"error": f"file not found / 找不到檔案: {q}"})
+                    r.meta["queue"] = os.path.normpath(q) if q else ""
+                    r.save_meta()
+                    if q:
+                        r.add("system", tx(r, "queue_set", p=r.meta["queue"]))
+                    return self._send(200, {"ok": True})
+                if act == "handoff":   # 改交件單欄位（第一欄固定當檔案欄；空清單＝回預設）
+                    hf = [str(x).strip()[:20] for x in (b.get("fields") or []) if str(x).strip()][:8]
+                    r.meta["handoff_fields"] = hf
+                    r.save_meta()
+                    r.add("system", tx(r, "handoff_fmt", fields="、".join(handoff_fields(r))))
+                    return self._send(200, {"ok": True, "fields": handoff_fields(r)})
                 if act == "close":
                     if not r.meta.get("closed"):
                         close_room(r)
@@ -2213,6 +2324,14 @@ class H(BaseHTTPRequestHandler):
             r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats, auto=bool(b.get("auto")))
         except RuntimeError as e:
             return self._send(400, {"error": str(e)})
+        hf = [str(x).strip()[:20] for x in (b.get("handoff_fields") or []) if str(x).strip()][:8]
+        if hf:
+            r.meta["handoff_fields"] = hf
+        q = os.path.normpath(str(b.get("queue") or "").strip()) if b.get("queue") else ""
+        if q and os.path.isfile(q):
+            r.meta["queue"] = q
+            r.add("system", tx(r, "queue_set", p=q))
+        r.save_meta()
         started = {}
         for s in seats:
             try:
@@ -2235,6 +2354,7 @@ def main():
     SERVER.daemon_threads = True
     threading.Thread(target=resume_seats, daemon=True).start()
     threading.Thread(target=watchdog, daemon=True).start()
+    threading.Thread(target=dep_watch, daemon=True).start()
     print(f"AI Meeting Room {VERSION}: http://127.0.0.1:{PORT}/", flush=True)
     print(f"data: {LOCAL}\ncodex: {find_codex() or 'NOT FOUND'}\nclaude: {find_claude() or 'NOT FOUND'}", flush=True)
     SERVER.serve_forever()

@@ -108,6 +108,10 @@ When a meeting starts, the hub launches each invited AI as a background process 
 
 **Local skills**: each invited AI receives this computer's skill list when it joins (project and user `.claude/skills` and `.agents/skills`, plus the Codex and Antigravity skill folders) and reads the matching `SKILL.md` when a task fits. Skills add no permissions, and the meeting command itself is left out. Restart the meeting room after updating so newly seated AIs get the list.
 
+**Hand-off forms and work queue** (2026-11-22, after MetaGPT's "each stage delivers a fixed-format document; the next stage waits only for its upstream files"):
+- A message starting with `[HANDOFF]`/`【交件】` must fill every field (default Files / Checked / Next; set `handoff_fields` in the meeting file; the first field is the file field). A missing or empty field, or an absolute path in the file field that does not exist, is rejected back to the AI instead of being posted.
+- `queue` points to a Markdown work queue (`## Seat` headings, `- [ ] 3. task depends: <file>` items). When the file appears, the room posts `[UPSTREAM READY]` naming that seat within 20 seconds. Change either during a meeting with `POST /api/rooms/<id>/queue` or `POST /api/rooms/<id>/handoff`.
+
 ## Safety model
 
 | Role | Can do |

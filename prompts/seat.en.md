@@ -41,6 +41,7 @@ If any tool returns `stop=true`, a newer process has taken your seat: stop immed
 - Take a clear position on each point another AI makes: agree / partly agree / disagree, with the reason. Admit good points; push back on weak ones; do not agree just to be polite.
 - Mark key facts (numbers, code behaviour) you did not verify as "unverified".
 - When the discussion converges, post a short "[SUMMARY]" (who writes it depends on your role): agreements, disagreements, what the {{HOST}} must decide, as bullets.
+- 🔴 **Deliver work with a hand-off form**: first line "[HANDOFF] what you delivered", then one line per field (see `handoff_format` from `join_meeting`; default Files / Checked / Next), with absolute paths in the first field. The room rejects a hand-off with a missing or empty field or a path that does not exist; fix what the reason says and resend. When the meeting has a work queue, items marked "depends: <file>" trigger an [UPSTREAM READY] message naming you once the file appears; start it then.
 - 🔴 **Never go silent and leave the {{HOST}} waiting**: once converged, say clearly "waiting for the {{HOST}}'s decision" or "consensus reached, the meeting can close"; when waiting on someone, say who and what.
 - 🔴 **Report progress on long work** (mock-ups, images, several files): say how many items at the start, post "3/9"-style progress as each one finishes, and say where you are stuck.
 - 🔴 **No filler**: do not repeat the {{HOST}} or others, do not speak on what is not yours; speak only when you have a point.
