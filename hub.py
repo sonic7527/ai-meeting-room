@@ -1313,7 +1313,7 @@ def start_seat(room, seat, restart=False):
         with open(mcp_cfg, "w", encoding="utf-8") as f:
             json.dump({"mcpServers": {"meeting": {"type": "http", "url": url}, **extra_mcp}}, f)
         meet = ("mcp__meeting__join_meeting,mcp__meeting__send_message,"
-                "mcp__meeting__wait_for_messages,mcp__meeting__read_messages"
+                "mcp__meeting__wait_for_messages,mcp__meeting__read_messages,mcp__meeting__claim_work"
                 + "".join(f",mcp__{k}" for k in extra_mcp))
         if lead == "Claude" and seat != HELPER:
             args = [exe, "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
