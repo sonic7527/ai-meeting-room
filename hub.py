@@ -87,7 +87,7 @@ def names_seat(room, seat, text):
 
 
 def wakes(room, seat, m):
-    """這則訊息要不要叫醒這一席：自己的不叫；助手只在被點名時叫；主持、站長照舊叫醒全部；
+    """這則訊息要不要叫醒這一席：自己的不叫；助手只在被點名時叫；站長叫醒全部；主持只叫醒被點名的（@全部＝全體）；
     系統通知有點名某席就只叫那一席；AI 席位之間只叫醒被點名的（會議設定 wake=all 可改回全部叫醒）"""
     if m["who"] == seat:
         return False
@@ -98,8 +98,12 @@ def wakes(room, seat, m):
     if m["who"] == "system":
         return "@" not in m["text"] or names_seat(room, seat, m["text"]) or \
             not any(names_seat(room, s, m["text"]) for s in SEATS)
-    if m["who"] not in SEATS:
+    if m["who"] == "user":
         return True
+    if m["who"] not in SEATS:
+        # 2026-11-23 站長：主持一則一則核過也叫醒全場，席位被吵到一直插話、浪費額度（第 4 集主持 488 則）。
+        # 主持也改成只叫醒被點名的席位；要全體就寫 @全部
+        return names_seat(room, seat, m["text"])
     return names_seat(room, seat, m["text"])
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 AUTO_RUN_LIMIT = int(os.environ.get("MEETING_AUTO_RUN_LIMIT", "120"))
@@ -388,7 +392,7 @@ T = {
         "claim_empty": "要寫 key（派工佇列的「席位#編號」或輸出檔路徑）。",
         "claim_taken": "「{item}」{seat} 在 {at} 已經認領了，改做別件。",
         "claim_not_yours": "「{item}」不是你認領的。",
-        "handoff_fmt": "以【交件】開頭的發言是交件單：第一行寫【交件】＋交了什麼，下面每行一欄：{fields}。第一欄寫檔案絕對路徑；缺欄、空欄或路徑不存在，會議室會直接退回不送出。",
+        "handoff_fmt": "以【交件】開頭的發言是交件單：第一行寫【交件】＋交了什麼，下面每行一欄：{fields}。第一欄寫檔案絕對路徑；缺欄、空欄或路徑不存在，會議室會直接退回不送出。交影片前自己至少每 0.15 秒抽一格看完整段（不准跳過），逐格問：動作合不合理（真人會不會這樣做、做幾次）、手臉有沒有變形、髮型服裝配件有沒有跟設定稿跑掉、人物比例與道具大小對不對、場景跟前後鏡接不接得上；有一項不合格就不交，「驗證」欄寫你抽了幾格、看到什麼。",
         "handoff_bad": "沒有送出，交件單不完整：{why}。照格式重發，每行一欄：{fields}（第一欄寫檔案絕對路徑）。",
         "handoff_missing": "缺「{f}」欄",
         "handoff_empty": "「{f}」欄是空的",
@@ -988,7 +992,7 @@ def guard_project(room):
             except RuntimeError:
                 continue
             new = sorted(now - seen)
-            if new:
+            if new and room.meta.get("lead"):   # 2026-11-23：沒有主審改檔時，變動多半是主持自己記清單，不再發警告吵醒全場
                 files = ", ".join(x.split(None, 1)[-1] for x in new[:10]) + (f" (+{len(new) - 10})" if len(new) > 10 else "")
                 room.add("system", tx(room, "proj_changed", project=top, files=files))
             seen = now
