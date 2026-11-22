@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import base64
 import glob
+import difflib
 import json
 import os
 import re
@@ -76,6 +77,30 @@ def seat_name(room, seat):
 
 def calls_helper(m):
     return m["who"] == "user" or any(k in m["text"] for k in HELPER_CALLS)
+
+
+def names_seat(room, seat, text):
+    if any(k in text for k in ALL_CALLS):
+        return True
+    return any(re.search(r"(?<![A-Za-z0-9])" + re.escape(n) + r"(?![A-Za-z0-9])", text)
+               for n in {seat, seat_name(room, seat)})
+
+
+def wakes(room, seat, m):
+    """這則訊息要不要叫醒這一席：自己的不叫；助手只在被點名時叫；主持、站長照舊叫醒全部；
+    系統通知有點名某席就只叫那一席；AI 席位之間只叫醒被點名的（會議設定 wake=all 可改回全部叫醒）"""
+    if m["who"] == seat:
+        return False
+    if seat == HELPER:
+        return calls_helper(m)
+    if room.meta.get("wake") == "all":
+        return True
+    if m["who"] == "system":
+        return "@" not in m["text"] or names_seat(room, seat, m["text"]) or \
+            not any(names_seat(room, s, m["text"]) for s in SEATS)
+    if m["who"] not in SEATS:
+        return True
+    return names_seat(room, seat, m["text"])
 AI_RUN_LIMIT = int(os.environ.get("MEETING_AI_RUN_LIMIT", "8"))
 AUTO_RUN_LIMIT = int(os.environ.get("MEETING_AUTO_RUN_LIMIT", "120"))
 DONE_MARK = ("【階段成果】", "[MILESTONE]")
@@ -87,6 +112,14 @@ HANDOFF_FIELDS = {"zh-TW": ["檔案", "驗證", "下一件"], "en": ["Files", "C
 PATH_RE = re.compile(r"(?:[A-Za-z]:[\\/]|~[\\/]|/)[^\s，。；、）)」」'\"`<>|*?]+")
 DEP_RE = re.compile(r"(?:依賴|depends)\s*[：:]\s*(\S+)", re.I)
 QUEUE_ITEM_RE = re.compile(r"^\s*[-*]\s*\[ \]\s*([0-9A-Za-z.]+)")
+# 2026-11-22 站長「把我常說的通病解決掉」（參考 chatroom-mcp、agentchattr、Concord、open-multi-agent）：
+# ①席位之間講話只叫醒被點名的那一席（主持、站長、系統通知照舊叫醒全部），沒點名的訊息等席位下次醒來一起看；
+# ②claim_work 認領工作上鎖：同一件只有第一個認領的席位成功，避免兩席同時跑同一批（第 3 集換聲搶顯示卡實案）；
+# ③擋空話（只有「收到／了解／待命」）與重複發言（跟自己最近 3 則幾乎一樣）：不送出、退回。
+ALL_CALLS = ("@全部", "@所有人", "@大家", "@all", "@All", "@everyone")
+ACK_WORDS = ("收到", "了解", "瞭解", "好的", "明白", "同意", "沒有補充", "無補充", "沒問題", "繼續待命", "待命中", "待命",
+             "等候中", "等候", "等待中", "繼續等", "謝謝", "ok", "okay", "noted", "received", "agreed", "standingby", "thanks")
+CLAIM_TTL = 3 * 3600
 
 
 def run_limit(room):
@@ -259,6 +292,12 @@ T = {
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "len_warn": "This meeting has reached {n} messages. Long meetings get hard to follow: the host should start wrapping up and continue in a new meeting at 2,000.",
         "len_over": "This meeting has {n} messages, over the 2,000 limit. Host: ask each seat for a summary (conclusions, rejected ideas, open items, file paths), put them in a new meeting's topic, then close this one and reopen.",
+        "not_called": "None of these messages name you. Read them for context; reply only if they affect your work.",
+        "no_content": "Not sent: a message that only acknowledges (received / noted / standing by) wastes everyone's quota. Speak only when you have a result, a question, or a hand-off.",
+        "repeat": "Not sent: this is almost the same as your message #{seq}. Post only what is new.",
+        "claim_empty": "key is required (work-queue item or output file path).",
+        "claim_taken": "{seat} already claimed \"{item}\" at {at}. Do other work.",
+        "claim_not_yours": "\"{item}\" is not claimed by you.",
         "handoff_fmt": "A message starting with [HANDOFF] is a hand-off: first line [HANDOFF] + what you delivered, then one line per field: {fields}. The first field lists absolute file paths; the room rejects the message if a field is missing or empty or a listed file does not exist.",
         "handoff_bad": "Not sent - the hand-off is incomplete: {why}. Resend with one line per field: {fields} (absolute paths in the first field).",
         "handoff_missing": "missing field '{f}'",
@@ -334,6 +373,12 @@ T = {
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
         "len_warn": "本場會議已 {n} 則。太長的會議後面會難回頭讀:主持請準備收尾,到 2,000 則就另開新會議接續。",
         "len_over": "本場會議已 {n} 則,超過 2,000 則上限。主持請收尾:請各席交摘要(結論、已否決、未完事項、檔案路徑),整理成新會議的議題後散會、重開。",
+        "not_called": "這些訊息都沒有點名你：看過掌握狀況就好，跟你的工作有關才回應。",
+        "no_content": "沒有送出：只有「收到／了解／待命」這類沒有內容的訊息，會浪費所有席位的額度。有成果、問題或交件才發言。",
+        "repeat": "沒有送出：跟你第 {seq} 則幾乎一樣。只講新的東西。",
+        "claim_empty": "要寫 key（派工佇列的「席位#編號」或輸出檔路徑）。",
+        "claim_taken": "「{item}」{seat} 在 {at} 已經認領了，改做別件。",
+        "claim_not_yours": "「{item}」不是你認領的。",
         "handoff_fmt": "以【交件】開頭的發言是交件單：第一行寫【交件】＋交了什麼，下面每行一欄：{fields}。第一欄寫檔案絕對路徑；缺欄、空欄或路徑不存在，會議室會直接退回不送出。",
         "handoff_bad": "沒有送出，交件單不完整：{why}。照格式重發，每行一欄：{fields}（第一欄寫檔案絕對路徑）。",
         "handoff_missing": "缺「{f}」欄",
@@ -1660,19 +1705,43 @@ TOOLS = [
          "ticket": _TICKET},
          "required": ["room", "name", "ticket", "text"]}},
     {"name": "wait_for_messages",
-     "description": "Wait for new messages from the host or the other AI. after_seq = the last message number you "
-                    "have seen. Returns at once if there is something new; otherwise returns an empty list after up "
+     "description": "Wait for new messages. after_seq = the last message number you have seen. Wakes you at once "
+                    "when the host speaks, a system notice is for everyone or names you, or another AI names you; "
+                    "messages between other AIs that do not name you come along when you next wake; otherwise returns an empty list after up "
                     "to timeout_sec seconds — then just call it again. closed=true means the host closed the "
                     "meeting: say one closing line and stop.",
      "inputSchema": {"type": "object", "properties": {
          "room": {"type": "string"}, "name": {"type": "string", "enum": list(SEATS)},
          "after_seq": {"type": "integer"}, "timeout_sec": {"type": "integer", "description": f"max {WAIT_MAX}"},
          "ticket": _TICKET}, "required": ["room", "name", "ticket", "after_seq"]}},
+    {"name": "claim_work",
+     "description": "Claim a piece of work before you start it, so no other seat does the same thing. key = the "
+                    "work-queue item (e.g. 'Helper#12') or the output file path. ok=false means another seat already "
+                    "has it: pick other work. Pass release=true to give it back. Claims expire after 3 hours.",
+     "inputSchema": {"type": "object", "properties": {
+         "room": {"type": "string"}, "name": {"type": "string", "enum": list(SEATS)},
+         "key": {"type": "string"}, "release": {"type": "boolean"},
+         "ticket": _TICKET}, "required": ["room", "name", "ticket", "key"]}},
     {"name": "read_messages",
      "description": "Read every message after after_seq without waiting.",
      "inputSchema": {"type": "object", "properties": {
          "room": {"type": "string"}, "after_seq": {"type": "integer"}}, "required": ["room", "after_seq"]}},
 ]
+
+
+def empty_or_repeat(room, seat, text):
+    """空話（整則只有收到／了解／待命之類）與重複發言（跟自己最近 3 則幾乎一樣）回傳退回原因，合格回空字串"""
+    core = re.sub(r"[\s\W_]+", "", text).lower()
+    rest = core
+    for w in sorted(ACK_WORDS, key=len, reverse=True):
+        rest = rest.replace(w.lower(), "")
+    if len(core) <= 24 and len(rest) <= 4:
+        return tx(room, "no_content")
+    mine = [m for m in room.msgs[-60:] if m["who"] == seat][-3:]
+    for m in reversed(mine):
+        if len(text) > 15 and difflib.SequenceMatcher(None, m["text"], text).ratio() >= 0.9:
+            return tx(room, "repeat", seq=m["seq"])
+    return ""
 
 
 def handoff_fields(room):
@@ -1766,6 +1835,7 @@ def call_tool(name, a):
         return {"title": room.meta["title"], "topic": room.meta["topic"], "you": seat, "closed": closed,
                 "rules": tx(room, "rules", n=run_limit(room)), "messages": fmt(room, room.msgs),
                 "handoff_format": tx(room, "handoff_fmt", fields="、".join(handoff_fields(room))),
+                "claims": {k: seat_name(room, v["seat"]) for k, v in (room.meta.get("claims") or {}).items()},
                 "last_seq": len(room.msgs)}
     if name == "read_messages":
         after = int(a.get("after_seq", 0))
@@ -1778,6 +1848,10 @@ def call_tool(name, a):
         text = (a.get("text") or "").strip()
         if not text:
             return {"ok": False, "reason": tx(room, "empty")}
+        if not (a.get("html") or a.get("attach_path") or a.get("image_path")):
+            why = empty_or_repeat(room, seat, text)
+            if why:
+                return {"ok": False, "reason": why}
         bad = handoff_problems(room, text)
         if bad:
             return {"ok": False, "reason": tx(room, "handoff_bad", why="；".join(bad),
@@ -1807,6 +1881,26 @@ def call_tool(name, a):
             room.save_meta()
             room.add("system", tx(room, "auto_done"))
         return {"ok": True, "seq": seq}
+    if name == "claim_work":
+        key = re.sub(r"\s+", "", str(a.get("key") or ""))[:120]
+        if not key:
+            return {"ok": False, "reason": tx(room, "claim_empty")}
+        claims = room.meta.setdefault("claims", {})
+        for k in [k for k, c in claims.items() if time.time() - c["t"] > CLAIM_TTL]:
+            claims.pop(k)
+        c = claims.get(key)
+        if a.get("release"):
+            if c and c["seat"] == seat:
+                claims.pop(key)
+                room.save_meta()
+                return {"ok": True, "released": key}
+            return {"ok": False, "reason": tx(room, "claim_not_yours", item=key)}
+        if c and c["seat"] != seat:
+            return {"ok": False, "reason": tx(room, "claim_taken", item=key, seat=seat_name(room, c["seat"]), at=c["at"][11:16])}
+        claims[key] = {"seat": seat, "t": time.time(), "at": now_iso()}
+        room.save_meta()
+        return {"ok": True, "claimed": key,
+                "others": {k: seat_name(room, v["seat"]) for k, v in claims.items() if v["seat"] != seat}}
     if name == "wait_for_messages":
         after = int(a.get("after_seq", 0))
         cap = 50 if seat == "Gemini" else WAIT_MAX
@@ -1814,8 +1908,7 @@ def call_tool(name, a):
         room.waiting[seat] = True
         try:
             with room.cond:
-                while not ([m for m in room.msgs[after:] if m["who"] != seat and (seat != HELPER or calls_helper(m))]
-                           or room.meta.get("closed")):
+                while not ([m for m in room.msgs[after:] if wakes(room, seat, m)] or room.meta.get("closed")):
                     left = end - time.time()
                     if left <= 0:
                         break
@@ -1824,8 +1917,10 @@ def call_tool(name, a):
             room.waiting[seat] = False
             room.busy_since[seat] = time.time()
         new = room.msgs[after:]
+        called = any(wakes(room, seat, m) for m in new)
         return {"messages": fmt(room, new), "last_seq": len(room.msgs), "closed": room.meta.get("closed", False),
-                "can_speak": room.ai_run() < run_limit(room), "hint": "" if new else tx(room, "no_new"),
+                "can_speak": room.ai_run() < run_limit(room),
+                "hint": tx(room, "no_new") if not new else ("" if called else tx(room, "not_called")),
                 "run_left": max(0, run_limit(room) - room.ai_run()), "run_limit": run_limit(room),
                 "run_note": tx(room, "run_left", left=max(0, run_limit(room) - room.ai_run()), n=run_limit(room))
                 + (tx(room, "auto_reminder") if room.meta.get("auto") else "")}
@@ -2208,6 +2303,12 @@ class H(BaseHTTPRequestHandler):
                     if q:
                         r.add("system", tx(r, "queue_set", p=r.meta["queue"]))
                     return self._send(200, {"ok": True})
+                if act == "wake":   # {"mode": "mention"｜"all"}
+                    if b.get("mode") not in ("all", "mention"):
+                        return self._send(400, {"error": "mode must be mention or all"})
+                    r.meta["wake"] = b["mode"]
+                    r.save_meta()
+                    return self._send(200, {"ok": True, "wake": b["mode"]})
                 if act == "handoff":   # 改交件單欄位（第一欄固定當檔案欄；空清單＝回預設）
                     hf = [str(x).strip()[:20] for x in (b.get("fields") or []) if str(x).strip()][:8]
                     r.meta["handoff_fields"] = hf
@@ -2324,6 +2425,8 @@ class H(BaseHTTPRequestHandler):
             r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats, auto=bool(b.get("auto")))
         except RuntimeError as e:
             return self._send(400, {"error": str(e)})
+        if b.get("wake") in ("all", "mention"):   # all＝每則都叫醒全部席位（舊做法，適合少人自由討論）
+            r.meta["wake"] = b["wake"]
         hf = [str(x).strip()[:20] for x in (b.get("handoff_fields") or []) if str(x).strip()][:8]
         if hf:
             r.meta["handoff_fields"] = hf

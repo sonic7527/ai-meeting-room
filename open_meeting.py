@@ -23,7 +23,8 @@ meeting.json (UTF-8):
    "seat_cfg": {"GPT": {"model": "", "effort": ""}},
    "auto": true,
    "queue": "/path/to/work-queue.md",
-   "handoff_fields": ["Files", "Checked", "Next"]}
+   "handoff_fields": ["Files", "Checked", "Next"],
+   "wake": "mention" | "all"}
 
 "seats", "seat_cfg" and "auto" are optional: without "seats" the meeting starts empty and you click Invite in the page;
 without "seat_cfg" each AI uses the model you picked last time. Meetings opened with this script start in autonomous
@@ -31,6 +32,7 @@ mode unless the file says "auto": false.
 "queue" (optional) attaches a Markdown work queue: "## Seat" headings with "- [ ] 3. task depends: <file>" items; when
 the file appears the room posts [UPSTREAM READY] naming that seat. "handoff_fields" (optional) sets the fields a message
 starting with [HANDOFF] must fill; the first field lists absolute file paths that must exist, or the message is rejected.
+"wake" (optional, default "mention"): AI-to-AI messages wake only the seats they name; "all" wakes everyone.
 Pass non-ASCII text through the file, not the command line (Windows shells may re-encode it).
 """
 BASE = f"http://127.0.0.1:{os.environ.get('MEETING_PORT', '7720')}"

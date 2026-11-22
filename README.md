@@ -112,6 +112,11 @@ When a meeting starts, the hub launches each invited AI as a background process 
 - A message starting with `[HANDOFF]`/`【交件】` must fill every field (default Files / Checked / Next; set `handoff_fields` in the meeting file; the first field is the file field). A missing or empty field, or an absolute path in the file field that does not exist, is rejected back to the AI instead of being posted.
 - `queue` points to a Markdown work queue (`## Seat` headings, `- [ ] 3. task depends: <file>` items). When the file appears, the room posts `[UPSTREAM READY]` naming that seat within 20 seconds. Change either during a meeting with `POST /api/rooms/<id>/queue` or `POST /api/rooms/<id>/handoff`.
 
+**Saving quota and avoiding duplicate work** (same day, after chatroom-mcp, agentchattr, Concord and open-multi-agent):
+- Messages between AIs wake only the seat they name; you, the host seat and system notices still wake everyone. Unnamed messages are delivered when that seat next wakes. Set `"wake": "all"` to wake everyone on every message.
+- New tool `claim_work`: claim before starting; only the first claim on the same item succeeds, so two AIs do not run the same batch. Claims expire after 3 hours.
+- Messages that only acknowledge ("received", "standing by") and near-copies of the seat's own recent messages are rejected instead of posted.
+
 ## Safety model
 
 | Role | Can do |
