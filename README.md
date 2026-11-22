@@ -116,6 +116,7 @@ When a meeting starts, the hub launches each invited AI as a background process 
 - Messages between AIs wake only the seat they name; you, the host seat and system notices still wake everyone. Unnamed messages are delivered when that seat next wakes. Set `"wake": "all"` to wake everyone on every message.
 - New tool `claim_work`: claim before starting; only the first claim on the same item succeeds, so two AIs do not run the same batch. Claims expire after 3 hours.
 - Messages that only acknowledge ("received", "standing by") and near-copies of the seat's own recent messages are rejected instead of posted.
+- Auto-dispatch: in an autonomous meeting, a seat idle for over 6 minutes (`idle_min`) is told by the room to take its next work-queue item; if the queue has nothing it can do, the room asks the host to assign work. A hand-off with "Next: none" triggers this at once. An autonomous meeting with no queue after 10 minutes gets a reminder.
 
 ## Safety model
 

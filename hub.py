@@ -120,6 +120,9 @@ ALL_CALLS = ("@全部", "@所有人", "@大家", "@all", "@All", "@everyone")
 ACK_WORDS = ("收到", "了解", "瞭解", "好的", "明白", "同意", "沒有補充", "無補充", "沒問題", "繼續待命", "待命中", "待命",
              "等候中", "等候", "等待中", "繼續等", "謝謝", "ok", "okay", "noted", "received", "agreed", "standingby", "thanks")
 CLAIM_TTL = 3 * 3600
+IDLE_MIN = float(os.environ.get("MEETING_IDLE_MIN", "6"))   # 自主會議裡席位閒置幾分鐘就自動派工（會議設定 idle_min 可改）
+QUEUE_WAIT_WORDS = ("等站長", "站長說可以", "站長看完", "站長點頭", "出來後", "出來再")   # 佇列裡寫明在等用戶或上游的件，自動派工跳過
+NO_NEXT_RE = re.compile(r"(?:下一件|Next)\s*[：:]\s*(?:無|沒有|暫無|待派|none|-)", re.I)
 
 
 def run_limit(room):
@@ -292,6 +295,9 @@ T = {
         "auto_gave_up": "{seat} stopped unexpectedly again ({why}); not restarting. Use Bring back when ready.",
         "len_warn": "This meeting has reached {n} messages. Long meetings get hard to follow: the host should start wrapping up and continue in a new meeting at 2,000.",
         "len_over": "This meeting has {n} messages, over the 2,000 limit. Host: ask each seat for a summary (conclusions, rejected ideas, open items, file paths), put them in a new meeting's topic, then close this one and reopen.",
+        "idle_dispatch": "[AUTO DISPATCH] @{seat} you have had no work for {n} min. Take queue item {num}: {what} (claim_work it first).",
+        "idle_no_work": "[NEEDS WORK] @{seat} has had no work for {n} min and the queue has nothing it can do now. Host: assign {seat} something now.",
+        "no_queue": "[NO WORK QUEUE] This autonomous meeting has no work queue attached, so idle seats cannot be given their next task automatically. Host: write the queue (## Seat / - [ ] N. task) and attach it with POST /api/rooms/<id>/queue.",
         "not_called": "None of these messages name you. Read them for context; reply only if they affect your work.",
         "no_content": "Not sent: a message that only acknowledges (received / noted / standing by) wastes everyone's quota. Speak only when you have a result, a question, or a hand-off.",
         "repeat": "Not sent: this is almost the same as your message #{seq}. Post only what is new.",
@@ -373,6 +379,9 @@ T = {
         "auto_back": "{seat} 意外離席({why}),已自動請回。",
         "len_warn": "本場會議已 {n} 則。太長的會議後面會難回頭讀:主持請準備收尾,到 2,000 則就另開新會議接續。",
         "len_over": "本場會議已 {n} 則,超過 2,000 則上限。主持請收尾:請各席交摘要(結論、已否決、未完事項、檔案路徑),整理成新會議的議題後散會、重開。",
+        "idle_dispatch": "【閒置自動派工】@{seat} 你已 {n} 分鐘沒有工作，照派工佇列接第 {num} 件：{what}（先用 claim_work 認領）",
+        "idle_no_work": "【要派工】@{seat} 已 {n} 分鐘沒有工作，派工佇列裡也沒有它現在能做的，主持立刻派工給 {seat}。",
+        "no_queue": "【沒有派工佇列】這場自主會議沒有掛派工佇列，席位閒著時會議室沒辦法自動接下一件。主持請寫派工佇列（## 席位／- [ ] 編號. 工作）並用 POST /api/rooms/<id>/queue 掛上。",
         "not_called": "這些訊息都沒有點名你：看過掌握狀況就好，跟你的工作有關才回應。",
         "no_content": "沒有送出：只有「收到／了解／待命」這類沒有內容的訊息，會浪費所有席位的額度。有成果、問題或交件才發言。",
         "repeat": "沒有送出：跟你第 {seq} 則幾乎一樣。只講新的東西。",
@@ -1773,42 +1782,116 @@ def handoff_problems(room, text):
     return bad
 
 
-def queue_deps(room):
-    """讀會議掛的派工佇列（Markdown：## 席位名 底下 - [ ] 編號. 內容 … 依賴：路徑），回傳 (席位, 編號, 路徑)"""
+def queue_items(room):
+    """讀會議掛的派工佇列（Markdown：## 席位名 底下 - [ ] 編號. 內容 … 依賴：路徑），
+    回傳還沒打勾的每一件 (段落名, 編號, 內容, 依賴檔路徑或 None)，照檔案裡的順序"""
     path = room.meta.get("queue")
     if not path or not os.path.isfile(path):
         return []
-    out, seat = [], None
+    out, sec = [], None
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             if line.startswith("## "):
-                seat = line[3:].strip()
+                sec = line[3:].strip()
                 continue
             m = QUEUE_ITEM_RE.match(line)
-            d = DEP_RE.search(line) if m and seat else None
+            if not (m and sec):
+                continue
+            d, dep = DEP_RE.search(line), None
             if d:
-                p = d.group(1).rstrip("）)」。，,;；")
-                if not os.path.isabs(os.path.expanduser(p)):
-                    p = os.path.join(room.meta.get("project") or "", p)
-                out.append((seat, m.group(1).rstrip("."), os.path.expanduser(p)))
+                dep = d.group(1).rstrip("）)」。，,;；")
+                if not os.path.isabs(os.path.expanduser(dep)):
+                    dep = os.path.join(room.meta.get("project") or "", dep)
+                dep = os.path.expanduser(dep)
+            out.append((sec, m.group(1).rstrip("."), line[m.end():].strip(" .、\n"), dep))
     return out
+
+
+def seat_of_section(room, sec):
+    """佇列段落名對到席位（Claude、GPT、GPT2、Gemini、Helper／助手），對不到回 None（例如「公共待認領」）"""
+    for s_ in room_seats(room):
+        if sec.strip().lower() in (s_.lower(), seat_name(room, s_).lower()):
+            return s_
+    return None
+
+
+def _ts(m):
+    try:
+        return datetime.fromisoformat(m["at"]).timestamp()
+    except Exception:
+        return 0
+
+
+def dep_check(room):
+    fired = room.meta.setdefault("dep_fired", [])
+    for sec, num, _, dep in queue_items(room):
+        key = f"{sec}|{num}|{dep}"
+        if not dep or key in fired or not os.path.exists(dep):
+            continue
+        fired.append(key)
+        room.save_meta()
+        room.add("system", tx(room, "dep_ready", seat=sec, num=num, p=dep))
+
+
+def next_item(room, seat):
+    """這一席在佇列裡下一件現在就能做的：沒打勾、依賴檔已經在、不是在等用戶、沒被別席認領"""
+    claims = room.meta.get("claims") or {}
+    for sec, num, text, dep in queue_items(room):
+        if seat_of_section(room, sec) != seat:
+            continue
+        if (dep and not os.path.exists(dep)) or any(w in text for w in QUEUE_WAIT_WORDS):
+            continue
+        tag = f"{sec}#{num}"
+        if any(tag in k and c["seat"] != seat for k, c in claims.items()):
+            continue
+        return num, text
+    return None
+
+
+def idle_check(room, now=None):
+    """2026-11-22 站長「主持常常忘記派工」：自主會議裡任何一席在等訊息、超過 idle_min 分鐘（預設 6）
+    既沒發言也沒被點名，或交件寫了「沒有下一件」，會議室自己照派工佇列點名它接下一件；
+    佇列裡沒它能做的，就發【要派工】點名主持。同一段閒置只提醒一次（它發言或被點名後重新計時）。"""
+    if not room.meta.get("auto"):
+        return
+    now = now or time.time()
+    limit = float(room.meta.get("idle_min") or IDLE_MIN) * 60
+    nag = room.meta.setdefault("idle_nag", {})
+    force = room.meta.setdefault("idle_force", {})
+    if not room.meta.get("queue") and room.msgs and now - _ts(room.msgs[0]) > 600 and not room.meta.get("noqueue_nag"):
+        room.meta["noqueue_nag"] = True
+        room.save_meta()
+        room.add("system", tx(room, "no_queue"))
+    for seat in room_seats(room):
+        if not room.waiting.get(seat):
+            continue                     # 正在做事（或還沒入席）就不算閒置
+        last = max([_ts(m) for m in room.msgs if m["who"] == seat or wakes(room, seat, m)] or [0])
+        forced = force.get(seat) and force[seat] >= last - 1
+        if not forced and (now - last < limit or nag.get(seat, 0) >= last):
+            continue
+        nxt = next_item(room, seat)
+        if seat == HELPER and not nxt:
+            continue                     # 助手平常就是等點名，佇列裡沒它的事就不催
+        nag[seat] = now
+        force.pop(seat, None)
+        room.save_meta()
+        mins = max(1, int((now - last) // 60))
+        if nxt:
+            room.add("system", tx(room, "idle_dispatch", seat=seat_name(room, seat), n=mins, num=nxt[0], what=nxt[1][:80]))
+        else:
+            room.add("system", tx(room, "idle_no_work", seat=seat_name(room, seat), n=mins))
 
 
 def dep_watch():
     while True:
         time.sleep(20)
         for room in list(ROOMS.values()):
-            if room.meta.get("closed") or not room.meta.get("queue"):
+            if room.meta.get("closed"):
                 continue
             try:
-                fired = room.meta.setdefault("dep_fired", [])
-                for seat, num, p in queue_deps(room):
-                    key = f"{seat}|{num}|{p}"
-                    if key in fired or not os.path.exists(p):
-                        continue
-                    fired.append(key)
-                    room.save_meta()
-                    room.add("system", tx(room, "dep_ready", seat=seat, num=num, p=p))
+                if room.meta.get("queue"):
+                    dep_check(room)
+                idle_check(room)
             except Exception as e:
                 print("dep_watch:", room.id, e, flush=True)
 
@@ -1876,6 +1959,9 @@ def call_tool(name, a):
             imgs.append(fn)
             frames_later(room, fn)
         seq = room.add(seat, text, imgs)["seq"]
+        if NO_NEXT_RE.search(text):   # 交件寫「下一件：沒有」→ 下一輪檢查就派工，不等閒置滿時間
+            room.meta.setdefault("idle_force", {})[seat] = time.time()
+            room.save_meta()
         if room.meta.get("auto") and text.startswith(DONE_MARK):
             room.meta["auto"] = False
             room.save_meta()
@@ -2425,6 +2511,8 @@ class H(BaseHTTPRequestHandler):
             r = new_room(title, topic, clean_cfg(seat_cfg), proj, lead, mode, lang, seats, auto=bool(b.get("auto")))
         except RuntimeError as e:
             return self._send(400, {"error": str(e)})
+        if b.get("idle_min"):
+            r.meta["idle_min"] = max(2.0, float(b["idle_min"]))
         if b.get("wake") in ("all", "mention"):   # all＝每則都叫醒全部席位（舊做法，適合少人自由討論）
             r.meta["wake"] = b["wake"]
         hf = [str(x).strip()[:20] for x in (b.get("handoff_fields") or []) if str(x).strip()][:8]

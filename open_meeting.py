@@ -24,7 +24,8 @@ meeting.json (UTF-8):
    "auto": true,
    "queue": "/path/to/work-queue.md",
    "handoff_fields": ["Files", "Checked", "Next"],
-   "wake": "mention" | "all"}
+   "wake": "mention" | "all",
+   "idle_min": 6}
 
 "seats", "seat_cfg" and "auto" are optional: without "seats" the meeting starts empty and you click Invite in the page;
 without "seat_cfg" each AI uses the model you picked last time. Meetings opened with this script start in autonomous
@@ -33,6 +34,7 @@ mode unless the file says "auto": false.
 the file appears the room posts [UPSTREAM READY] naming that seat. "handoff_fields" (optional) sets the fields a message
 starting with [HANDOFF] must fill; the first field lists absolute file paths that must exist, or the message is rejected.
 "wake" (optional, default "mention"): AI-to-AI messages wake only the seats they name; "all" wakes everyone.
+"idle_min" (optional, default 6, min 2): in autonomous meetings an idle seat is given its next queue item after this many minutes.
 Pass non-ASCII text through the file, not the command line (Windows shells may re-encode it).
 """
 BASE = f"http://127.0.0.1:{os.environ.get('MEETING_PORT', '7720')}"
