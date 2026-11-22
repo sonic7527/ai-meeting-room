@@ -100,6 +100,7 @@ header h2{margin:0;font-size:20px;flex:1 1 260px;min-width:0}
 .body video{display:block;width:100%;max-height:640px;margin-top:10px;border-radius:10px;border:1px solid var(--hair);background:#000}
 .body audio{display:block;width:100%;margin-top:10px}
 #clip{flex:0 0 auto;padding:10px 12px;font-size:16px;line-height:1}
+#mic{flex:0 0 auto;padding:10px 12px;font-size:16px;line-height:1}#mic.rec{background:#c0392b;color:#fff;border-color:#c0392b}
 .opbtn{padding:0 8px;font-size:11px;line-height:1.7;border-radius:99px;background:transparent;color:var(--ink-3);border:1px solid var(--hair)}
 .opbtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 #pending{display:flex;flex-wrap:wrap;gap:6px;padding:0 24px}
@@ -211,7 +212,7 @@ body.nocol aside{display:none}
   <div class="log" id="log"><div class="empty" data-t="emptyLog"></div></div>
   <div id="replybar" hidden><span id="replytxt"></span><button type="button" id="replyx" aria-label="cancel">×</button></div>
   <div id="pending"></div>
-  <footer><button type="button" class="ghost" id="clip" disabled>📎</button><input type="file" id="pick" multiple hidden aria-label="選擇參考附件（不限檔案類型）"><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
+  <footer><button type="button" class="ghost" id="clip" disabled>📎</button><button type="button" class="ghost" id="mic" disabled aria-label="錄音">🎤</button><input type="file" id="pick" multiple hidden aria-label="選擇參考附件（不限檔案類型）"><textarea id="say" disabled></textarea><button class="primary" id="send" disabled data-t="send"></button></footer>
   <div id="ctx" hidden></div>
   <div class="note" id="note"></div>
 </main>
@@ -444,7 +445,7 @@ async function poll(){
     if(fresh.length&&atBottom)log.scrollTop=log.scrollHeight;
     if(j.meta.archive)clearInterval(timer);
     closed=!!j.meta.closed;renderSeats(j);
-    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;$("clip").disabled=closed;
+    $("closeBtn").hidden=closed;$("cfgBtn").hidden=closed||!curSeats.length;$("inviteBtn").hidden=closed;$("say").disabled=closed;$("send").disabled=closed;$("clip").disabled=closed;$("mic").disabled=closed;
     $("recall").hidden=closed||!Object.values(j.seats).includes("away");
     const ab=$("autoBtn");ab.hidden=closed;ab.textContent=j.meta.auto?L().autoOff:L().autoOn;ab.title=L().autoOnTip;
     ab.className=j.meta.auto?"primary":"ghost";
@@ -565,6 +566,31 @@ $("navBtn").onclick=()=>document.body.classList.toggle("nav");
 $("moreBtn").onclick=()=>document.body.classList.toggle("more");
 $("list").addEventListener("click",e=>{if(e.target.closest(".item"))document.body.classList.remove("nav");});
 $("pick").onchange=()=>{uploadFiles([...$("pick").files]);$("pick").value="";};
+/* 麥克風錄音:按一下開始、再按一下停止,轉成 WAV 當附件(手機與電腦都可用,需 https 或 localhost) */
+let REC=null,REC_T=null;
+function wavFile(buf,name){const n=buf.length,sr=buf.sampleRate,ch=buf.numberOfChannels,m=new Float32Array(n);
+  for(let c=0;c<ch;c++){const d=buf.getChannelData(c);for(let i=0;i<n;i++)m[i]+=d[i]/ch;}
+  const b=new ArrayBuffer(44+n*2),v=new DataView(b),w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));};
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVE");w(12,"fmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){const x=Math.max(-1,Math.min(1,m[i]));v.setInt16(44+i*2,x<0?x*32768:x*32767,true);}
+  return new File([b],name+".wav",{type:"audio/wav"});}
+$("mic").onclick=async()=>{const b=$("mic");
+  if(REC){REC.stop();return;}
+  if(!navigator.mediaDevices||!window.MediaRecorder){$("note").textContent="這個瀏覽器不能錄音(要用 https 網址或本機開啟)";return;}
+  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});}
+  catch(e){$("note").textContent="沒有拿到麥克風權限: "+e.message;return;}
+  const parts=[],rec=new MediaRecorder(st),t0=Date.now();REC=rec;
+  rec.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
+  rec.onstop=async()=>{clearInterval(REC_T);REC=null;b.classList.remove("rec");b.textContent="🎤";st.getTracks().forEach(t=>t.stop());
+    const d=new Date(),p2=x=>String(x).padStart(2,"0"),name="語氣參考_"+p2(d.getHours())+p2(d.getMinutes())+p2(d.getSeconds());
+    const blob=new Blob(parts,{type:rec.mimeType||"audio/webm"});let f;
+    try{const ac=new (window.AudioContext||window.webkitAudioContext)();const buf=await ac.decodeAudioData(await blob.arrayBuffer());ac.close();f=wavFile(buf,name);}
+    catch(e){f=new File([blob],name+(/mp4|aac|m4a/.test(blob.type)?".m4a":".webm"),{type:blob.type});}
+    uploadFiles([f]);};
+  rec.start();b.classList.add("rec");b.textContent="⏹ 0s";
+  REC_T=setInterval(()=>{b.textContent="⏹ "+Math.floor((Date.now()-t0)/1000)+"s";},500);};
+
 for(const ev of["dragenter","dragover"])document.querySelector("footer").addEventListener(ev,e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes("Files")){e.preventDefault();e.currentTarget.classList.add("drop");}});
 document.querySelector("footer").addEventListener("dragleave",e=>e.currentTarget.classList.remove("drop"));
 document.querySelector("footer").addEventListener("drop",e=>{e.preventDefault();e.currentTarget.classList.remove("drop");if(e.dataTransfer.files.length)uploadFiles([...e.dataTransfer.files]);});
