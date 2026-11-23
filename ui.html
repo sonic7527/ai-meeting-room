@@ -476,12 +476,14 @@ function quoteLine(m){return"↩ #"+m.seq+" "+whoName(m.who)+"："+snippet(m)+"\
 function startReply(m){REPLY=m;$("replytxt").textContent=L().replyTo+" "+whoName(m.who)+"："+snippet(m);$("replybar").hidden=false;$("say").focus();}
 function clearReply(){REPLY=null;$("replybar").hidden=true;}
 $("replyx").onclick=clearReply;
-async function postText(text,files){const cid=Date.now().toString(36)+Math.random().toString(36).slice(2,10);let err;
+async function postText(text,files,keepPos){const cid=Date.now().toString(36)+Math.random().toString(36).slice(2,10);let err;
   for(let i=0;i<4;i++){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),15000);
     try{await api(R(cur)+"/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text,files:files||[],cid}),signal:ac.signal});err=null;break;}
     catch(e){err=e;if(e.status&&e.status<500)break;await new Promise(z=>setTimeout(z,1500*(i+1)));}
     finally{clearTimeout(t);}}
-  if(err)throw err;await poll();$("log").scrollTop=$("log").scrollHeight;}
+  // 按採用／否決（keepPos）時停在原位，站長才不用每次滑回去（2026-11-23 站長）
+  if(err)throw err;const log=$("log"),top=log.scrollTop;await poll();
+  log.scrollTop=keepPos?top:log.scrollHeight;}
 let PENDING=[],UPLOADS=0;
 function drawPending(){const box=$("pending");box.textContent="";
   for(const f of PENDING){const sp=document.createElement("span");sp.textContent=f.label;
@@ -516,7 +518,7 @@ async function send(){
   catch(e){$("note").textContent=L().sendFail+": "+(e.name==="AbortError"?"timeout":e.message);}
   $("send").disabled=closed;
 }
-async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText));}catch(e){$("note").textContent=e.message;}}
+async function react(m,kind){if(!cur||closed)return;try{await postText(quoteLine(m)+(kind==="veto"?L().vetoText:L().adoptText),[],true);}catch(e){$("note").textContent=e.message;}}
 // 2026-10-27 站長：評分頁要能一鍵送分。附件網頁在 sandbox 裡不能直接發言，改成把分數文字填進下方輸入框，站長自己按送出
 // （只收會議裡附件框送來、開頭「【評分】」的文字，網頁不能替站長發言）
 addEventListener("message",e=>{const d=e.data;if(!d||d.type!=="meeting-rating"||typeof d.text!=="string")return;
