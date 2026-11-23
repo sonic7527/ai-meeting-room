@@ -342,6 +342,8 @@ T = {
         "empty": "The message is empty.",
         "bad_image": "附件不存在或超過大小限制：圖片／網頁 {img_mb} MB、影音 {media_mb} MB、其他檔案 {file_mb} MB；支援任意檔案類型：{p}",
         "no_new": "No new messages. Call wait_for_messages again.",
+        "unread_first": "Not sent: the host or user sent you {n} new instruction(s) since you last read the meeting (below). "
+                        "Read them first; if they change your work, follow them instead of what you were about to post, then send again.",
         "run_left": "You may post {left} more message(s) in a row before waiting for the {host} (current limit {n}; the limit changes when autonomous mode is turned on or off).",
         "rules": "Without the host speaking, the two AIs may send at most {n} messages in a row; then wait for the host.",
         "need_git": "A lead needs a git project (the lead edits code in an isolated git worktree). "
@@ -424,6 +426,8 @@ T = {
         "empty": "發言內容是空的。",
         "bad_image": "附件不存在或超過大小限制：圖片／網頁 {img_mb} MB、影音 {media_mb} MB、其他檔案 {file_mb} MB；支援任意檔案類型：{p}",
         "no_new": "目前沒有新發言,請再呼叫 wait_for_messages。",
+        "unread_first": "沒有送出：你上次讀會議之後，{host}或主持有 {n} 則新指示點到你（附在下面）。先讀；"
+                        "如果指示改了你的工作，就照新指示做，不要照原本要發的內容，改好再送。",
         "run_left": "目前還能連續發言 {left} 則才需要等{host}(上限 {n} 則;{host}開關自主會議時上限會跟著變)。",
         "rules": "{host}沒發言時,AI 合計最多連講 {n} 則,之後要等{host}開口。",
         "need_git": "指定主審需要 git 專案(主審在獨立副本裡改程式);這個資料夾不是 git 專案,請改用平等討論",
@@ -489,6 +493,7 @@ class Room:
         self.msgs = []
         self.cond = threading.Condition()
         self.waiting = {}
+        self.seen = {}   # 各席最後讀到的序號（送訊息前檢查有沒有漏看主持／站長的新指示）
         self.busy_since = {}
         self.procs = {}
         self.cids = {}
@@ -1919,6 +1924,7 @@ def call_tool(name, a):
             return {"ok": False, "stop": True, "reason": tx(room, "stale")}
     closed = room.meta.get("closed", False)
     if name == "join_meeting":
+        room.seen[seat] = len(room.msgs)
         return {"title": room.meta["title"], "topic": room.meta["topic"], "you": seat, "closed": closed,
                 "rules": tx(room, "rules", n=run_limit(room)), "messages": fmt(room, room.msgs),
                 "handoff_format": tx(room, "handoff_fmt", fields="、".join(handoff_fields(room))),
@@ -1926,10 +1932,23 @@ def call_tool(name, a):
                 "last_seq": len(room.msgs)}
     if name == "read_messages":
         after = int(a.get("after_seq", 0))
+        if seat:
+            room.seen[seat] = len(room.msgs)
         return {"messages": fmt(room, room.msgs[after:]), "last_seq": len(room.msgs), "closed": closed}
     if name == "send_message":
         if closed:
             return {"ok": False, "reason": tx(room, "closed_no_speak")}
+        # 2026-11-23 站長：「找為什麼 GPT 跟 GPT2 會不聽指揮」——席位做長工作（出圖、跑片）時不會去讀會議，
+        # 主持中途改指令它看不到，做完就照舊計畫交件（#850→#851、#852→#865）。送出前若有沒讀過、點到它的
+        # 站長或主持指示，就先退回並附上那幾則，逼它讀完再發。
+        if seat in room.seen:
+            missed = [m for m in room.msgs[room.seen[seat]:]
+                      if m["who"] != seat and (m["who"] == "user" or
+                         (m["who"] not in SEATS and m["who"] != "system" and names_seat(room, seat, m["text"])))]
+            room.seen[seat] = len(room.msgs)
+            if missed:
+                return {"ok": False, "reason": tx(room, "unread_first", n=len(missed)),
+                        "messages": fmt(room, missed), "last_seq": len(room.msgs)}
         if room.ai_run() >= run_limit(room):
             return {"ok": False, "reason": tx(room, "run_limit", n=run_limit(room))}
         text = (a.get("text") or "").strip()
@@ -2007,6 +2026,7 @@ def call_tool(name, a):
             room.waiting[seat] = False
             room.busy_since[seat] = time.time()
         new = room.msgs[after:]
+        room.seen[seat] = len(room.msgs)
         called = any(wakes(room, seat, m) for m in new)
         return {"messages": fmt(room, new), "last_seq": len(room.msgs), "closed": room.meta.get("closed", False),
                 "can_speak": room.ai_run() < run_limit(room),
