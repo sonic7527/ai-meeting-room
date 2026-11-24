@@ -97,7 +97,7 @@ New-Item -ItemType Junction -Path "$HOME\.claude\skills\meeting" -Target "$HOME\
 ln -s ~/ai-meeting-room/skills/meeting ~/.claude/skills/meeting
 ```
 
-Then just tell Claude "start a meeting about …": it starts the room, opens an empty meeting on the current project in a new Chrome tab, waits until you close it and reports the result. If you cloned somewhere other than `~/ai-meeting-room`, set `AI_MEETING_ROOM_DIR`. With the Chinese command, if the project has `docs/meetings/CONDITION_CARD.md`, its contents are placed at the top of the meeting topic so every AI answers the same checklist before proposing anything.
+Then just tell Claude "start a meeting about …": it starts the room, opens an empty meeting on the current project in a new Chrome tab, waits until you close it and reports the result. If you cloned somewhere other than `~/ai-meeting-room`, set `AI_MEETING_ROOM_DIR`. With the Chinese command, if the project has `docs/meetings/CONDITION_CARD.md`, its contents are placed at the top of the meeting topic so every AI answers the same checklist before proposing anything. A topic fact card (`docs/meetings/*_FACT_CARD.md`: basic facts, current rules, rejected ideas) is attached after it the same way. When you bring up a new idea mid-meeting, the host rewrites the topic (`POST /api/rooms/<id>/topic`) with your idea spelled out as concrete rules, so the AIs stop guessing what you meant.
 
 ## How it works
 
